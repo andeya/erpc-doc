@@ -1,14 +1,28 @@
-# Binaries for programs and plugins
-*.exe
-*.dll
+*.o
+*.a
 *.so
-*.dylib
-
-# Test binary, build with `go test -c`
+_obj
+_test
+*.[568vq]
+[568vq].out
+*.cgo1.go
+*.cgo2.c
+_cgo_defun.c
+_cgo_gotypes.go
+_cgo_export.*
+_testmain.go
+*.exe
+*.exe~
 *.test
-
-# Output of the go coverage tool, specifically when used with LiteIDE
-*.out
-
-# Project-local glide cache, RE: https://github.com/Masterminds/glide/issues/736
-.glide/
+*.prof
+*.rar
+*.zip
+*.gz
+*.psd
+*.bmd
+*.cfg
+*.pptx
+*.log
+*nohup.out
+*.sublime-project
+*.sublime-workspace

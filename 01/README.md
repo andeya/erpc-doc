@@ -7,7 +7,7 @@
 ### 目录
 
 - [1. TP的架构设计](#1-tp的架构设计)
-- [2. TP的实现理念](#TP的实现理念)
+- [2. Socket包](#2-Socket包)
 
 
 ### 1. TP的架构设计
@@ -52,7 +52,7 @@ TP定位于提供socket通信解决方案，遵循以下三点设计理念。
 	- 支持设置慢操作报警阈值
 	- 提供Hander的上下文（pull、push的handler）
 
-### 2. TP-Socket
+### 2. Socket包
 
 `telepot/socket`包在net.Conn的基础上增加自定义包协议、传输管道等功能，是TP的基础通信包。
 

@@ -20,7 +20,25 @@ TP定位于提供socket通信解决方案，遵循以下三点设计理念。
 - 高效：高性能，低消耗
 - 灵活：用法灵活简单，易于深入定制
 
-#### 1.2 重要特性
+
+#### 1.2 架构图
+
+![Teleport-Architecture](https://github.com/henrylee2cn/teleport/raw/master/doc/teleport_architecture.png)
+
+- `Peer`: 通信端点，可以是客户端或客户端
+- `Plugin`: 贯穿于通信各个环节的插件
+- `Handler`: 用于处理推、拉请求的函数
+- `Router`: 通过请求信息（如URI）索引响应函数（Handler）的路由器
+- `Socket`: 对net.Conn的封装，增加自定义包协议、传输管道等功能
+- `Session`: 基于Socket封装的连接会话，提供的推、拉、回复、关闭等会话操作
+- `Context`: 连接会话中一次通信（如PULL-REPLY, PUSH）的上下文对象
+- `Packet`: 约定数据报文包含的内容元素（注意：它不是协议格式）
+- `Protocol`: 数据报文封包解包操作，即通信协议的实现接口
+- `Codec`: 数据包body部分（请求参数或响应结果）的序列化接口
+- `XferPipe`: 对数据包字节流的编码处理管道，如压缩、加密、校验等
+
+
+#### 1.3 重要特性
 
 - 支持自定义通信协议和包数据处理管道
 - TCP长连接使用I/O缓冲区与多路复用技术，提升数据吞吐量
@@ -34,7 +52,5 @@ TP定位于提供socket通信解决方案，遵循以下三点设计理念。
 	- 支持设置慢操作报警阈值
 	- 提供Hander的上下文（pull、push的handler）
 
-#### 1.3 架构图
 
-![Teleport-Architecture](https://github.com/henrylee2cn/teleport/raw/master/doc/teleport_architecture.png)
 

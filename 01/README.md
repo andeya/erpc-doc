@@ -118,12 +118,6 @@ type (
 		SetBody(body interface{})
 		// SetNewBody resets the function of geting body.
 		SetNewBody(newBodyFunc NewBodyFunc)
-		// NewBody creates a new body by packet type and URI.
-		// Note:
-		//  only for writing packet;
-		//  should be nil when reading packet.
-		// NewBody(seq uint64, ptype byte, uri string) interface{}
-
 		// MarshalBody returns the encoding of body.
 		MarshalBody() ([]byte, error)
 		// UnmarshalNewBody unmarshal the encoded data to a new body.
@@ -138,9 +132,43 @@ type (
 )
 ```
 
-|*Go技巧思考：*
-|------------------------------------------------------
-|Q1: *实际上`Header`和`Body`两个接口都是由`Packet`结构体实现，那么为什么不直接定义两个子结构体？*<br>A1:<br>1. `Packet`只是用于定义统一的数据包内容元素，并给予任何关于数据结构方面（协议）的暗示、误导。因此不应该使用子结构体<br>2. `Packet`全部字段均不可导出，可以增强框架对其用法的掌控力，避免开发者作出不恰当操作
+- **编译期校验`Packet`是否已实现`Header`与`Body`接口的技巧**
+
+```go
+var (
+	_ Header = new(Packet)
+	_ Body   = new(Packet)
+)
+```
+
+- **一种常见的自由赋值的函数用法，用于自由设置`Packet`的字段**
+
+```go
+// PacketSetting sets Header field.
+type PacketSetting func(*Packet)
+
+// WithSeq sets the packet sequence
+func WithSeq(seq uint64) PacketSetting {
+	return func(p *Packet) {
+		p.seq = seq
+	}
+}
+
+// Ptype sets the packet type
+func WithPtype(ptype byte) PacketSetting {
+	return func(p *Packet) {
+		p.ptype = ptype
+	}
+}
+
+...
+```
+
+
+- ***Go技巧思考：实际上`Header`和`Body`两个接口都是由`Packet`结构体实现，那么为什么不直接定义两个子结构体？***
+	1. `Packet`只是用于定义统一的数据包内容元素，并给予任何关于数据结构方面（协议）的暗示、误导。因此不应该使用子结构体
+	2. `Packet`全部字段均不可导出，可以增强框架对其用法的掌控力，避免开发者作出不恰当操作
+
 
 #### 2.2 Socket源码片段分析
 
@@ -150,40 +178,7 @@ type (
 	//
 	// Multiple goroutines may invoke methods on a Socket simultaneously.
 	Socket interface {
-		// LocalAddr returns the local network address.
-		LocalAddr() net.Addr
-
-		// RemoteAddr returns the remote network address.
-		RemoteAddr() net.Addr
-
-		// SetDeadline sets the read and write deadlines associated
-		// with the connection. It is equivalent to calling both
-		// SetReadDeadline and SetWriteDeadline.
-		//
-		// A deadline is an absolute time after which I/O operations
-		// fail with a timeout (see type Error) instead of
-		// blocking. The deadline applies to all future and pending
-		// I/O, not just the immediately following call to Read or
-		// Write. After a deadline has been exceeded, the connection
-		// can be refreshed by setting a deadline in the future.
-		//
-		// An idle timeout can be implemented by repeatedly extending
-		// the deadline after successful Read or Write calls.
-		//
-		// A zero value for t means I/O operations will not time out.
-		SetDeadline(t time.Time) error
-
-		// SetReadDeadline sets the deadline for future Read calls
-		// and any currently-blocked Read call.
-		// A zero value for t means Read will not time out.
-		SetReadDeadline(t time.Time) error
-
-		// SetWriteDeadline sets the deadline for future Write calls
-		// and any currently-blocked Write call.
-		// Even if write times out, it may return n > 0, indicating that
-		// some of the data was successfully written.
-		// A zero value for t means Write will not time out.
-		SetWriteDeadline(t time.Time) error
+		net.Conn
 
 		// WritePacket writes header and body to the connection.
 		// Note: must be safe for concurrent use by multiple goroutines.
@@ -192,23 +187,6 @@ type (
 		// ReadPacket reads header and body from the connection.
 		// Note: must be safe for concurrent use by multiple goroutines.
 		ReadPacket(packet *Packet) error
-
-		// Read reads data from the connection.
-		// Read can be made to time out and return an Error with Timeout() == true
-		// after a fixed time limit; see SetDeadline and SetReadDeadline.
-		Read(b []byte) (n int, err error)
-
-		// Write writes data to the connection.
-		// Write can be made to time out and return an Error with Timeout() == true
-		// after a fixed time limit; see SetDeadline and SetWriteDeadline.
-		Write(b []byte) (n int, err error)
-
-		// Reset reset net.Conn
-		// Reset(net.Conn)
-
-		// Close closes the connection socket.
-		// Any blocked Read or Write operations will be unblocked and return errors.
-		Close() error
 
 		// Public returns temporary public data of Socket.
 		Public() goutil.Map
@@ -284,13 +262,103 @@ func (s *socket) ReadPacket(packet *Packet) error {
 }
 ```
 
-|*Go技巧思考*
-|------------------------------------------------------
-|Q1: *为什么要对外提供接口，而不直接公开结构体？*<br>A1:<br>`socket`结构体通过匿名字段`net.Conn`的方式“继承”了底层的连接操作方法，并基于该匿名字段创建了协议对象。<br>所以不能允许外部直接通过`socket.Conn=newConn`的方式改变连接句柄。<br>使用`Socket`接口封装包外不可见的`socket`结构体可达到避免外部直接修改字段的目的。
+- ***Go技巧思考：为什么要对外提供接口，而不直接公开结构体？***
+
+	`socket`结构体通过匿名字段`net.Conn`的方式“继承”了底层的连接操作方法，并基于该匿名字段创建了协议对象。<br>所以不能允许外部直接通过`socket.Conn=newConn`的方式改变连接句柄。<br>使用`Socket`接口封装包外不可见的`socket`结构体可达到避免外部直接修改字段的目的。
 
 
 #### 2.3 Proto定义
 
+数据包封包、解包接口。即封包时以`Packet`的字段为内容元素进行数据序列化，解包时以`Packet`为内容模板进行数据的反序列化。
 
+```go
+type (
+	// Proto pack/unpack protocol scheme of socket packet.
+	Proto interface {
+		// Version returns the protocol's id and name.
+		Version() (byte, string)
+		// Pack pack socket data packet.
+		// Note: Make sure to write only once or there will be package contamination!
+		Pack(*Packet) error
+		// Unpack unpack socket data packet.
+		// Note: Concurrent unsafe!
+		Unpack(*Packet) error
+	}
+	// ProtoFunc function used to create a custom Proto interface.
+	ProtoFunc func(io.ReadWriter) Proto
+)
+```
 
+### 3 Codec包
+
+用于`socket.Packet.body`的编解码器。如TP已经自带注册了JSON、Protobuf、String三种编解码器。
+
+#### 3.1 Codec接口定义
+
+```go
+type (
+	// Codec makes Encoder and Decoder
+	Codec interface {
+		// Id returns codec id.
+		Id() byte
+		// Name returns codec name.
+		Name() string
+		// Marshal returns the encoding of v.
+		Marshal(v interface{}) ([]byte, error)
+		// Unmarshal parses the encoded data and stores the result
+		// in the value pointed to by v.
+		Unmarshal(data []byte, v interface{}) error
+	}
+)
+```
+
+- 常用的依赖注入实现方式，实现编解码器的自由定制
+
+```go
+var codecMap = struct {
+	nameMap map[string]Codec
+	idMap   map[byte]Codec
+}{
+	nameMap: make(map[string]Codec),
+	idMap:   make(map[byte]Codec),
+}
+
+const (
+	NilCodecId   byte   = 0
+	NilCodecName string = ""
+)
+
+// Reg registers Codec
+func Reg(codec Codec) {
+	if codec.Id() == NilCodecId {
+		panic(fmt.Sprintf("codec id can not be %d", NilCodecId))
+	}
+	if _, ok := codecMap.nameMap[codec.Name()]; ok {
+		panic("multi-register codec name: " + codec.Name())
+	}
+	if _, ok := codecMap.idMap[codec.Id()]; ok {
+		panic(fmt.Sprintf("multi-register codec id: %d", codec.Id()))
+	}
+	codecMap.nameMap[codec.Name()] = codec
+	codecMap.idMap[codec.Id()] = codec
+}
+
+// Get returns Codec
+func Get(id byte) (Codec, error) {
+	codec, ok := codecMap.idMap[id]
+	if !ok {
+		return nil, fmt.Errorf("unsupported codec id: %d", id)
+	}
+	return codec, nil
+}
+
+// GetByName returns Codec
+func GetByName(name string) (Codec, error) {
+	codec, ok := codecMap.nameMap[name]
+	if !ok {
+		return nil, fmt.Errorf("unsupported codec name: %s", name)
+	}
+	return codec, nil
+}
+```
 

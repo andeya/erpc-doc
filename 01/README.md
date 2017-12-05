@@ -4,6 +4,30 @@
 
 *注：下文以`TP`作为`Teleport`的简称。*
 
+简单的性能对比：
+
+- teleport/socket
+
+![tp_socket_benchmark](https://github.com/henrylee2cn/teleport/raw/master/doc/tp_socket_benchmark.png)
+
+**[test code](https://github.com/henrylee2cn/rpc-benchmark/tree/master/teleport)**
+
+- 与rpcx的直接对比
+
+![rpcx_benchmark](https://github.com/henrylee2cn/teleport/raw/master/doc/rpcx_benchmark.jpg)
+
+**[test code](https://github.com/henrylee2cn/rpc-benchmark/tree/master/rpcx)**
+
+- rpcx与其他框架的对比参考（图片来源于rpcx）
+
+![rpc_compare](src/rpc_compare.png)
+
+- teleport/socket火焰图
+
+![tp_socket_torch](https://github.com/henrylee2cn/teleport/raw/master/doc/tp_socket_torch.png)
+
+**[svg file](https://github.com/henrylee2cn/teleport/raw/master/doc/tp_socket_torch.svg)**
+
 
 |目 录
 |--------------------------------

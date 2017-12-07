@@ -315,7 +315,7 @@ type (
 
 ### 3 Codec包
 
-用于`socket.Packet.body`的编解码器。如TP已经自带注册了JSON、Protobuf、String三种编解码器。
+`teleport/codec`包用于`socket.Packet.body`的编解码器。如TP已经自带注册了JSON、Protobuf、String三种编解码器。
 
 #### 3.1 Codec接口定义
 
@@ -335,6 +335,8 @@ type (
 	}
 )
 ```
+
+#### 3.2 Codec注册中心
 
 - 常用的依赖注入实现方式，实现编解码器的自由定制
 
@@ -386,3 +388,36 @@ func GetByName(name string) (Codec, error) {
 }
 ```
 
+- ***Go技巧思考：变量`codecMap`的类型为什么不用关键字`type`定义？***
+
+	Go语法允许我们在声明变量时临时定义类型并赋值。因为`codecMap`所属类型只会有一个全局唯一的实例，且不会用于其他变量类型声明上，所以直接在声明变量时声明类型可以令代码更简洁。
+
+### 4 Xfer包
+
+`teleport/xfer`包用于对数据包进行一系列自定义处理加工，如gzip压缩、加密、校验等。
+
+#### 4.1 类型定义
+
+```go
+type (
+	// XferPipe transfer filter pipe, handlers from outer-most to inner-most.
+	// Note: the length can not be bigger than 255!
+	XferPipe struct {
+		filters []XferFilter
+	}
+	// XferFilter handles byte stream of packet when transfer.
+	XferFilter interface {
+		Id() byte
+		OnPack([]byte) ([]byte, error)
+		OnUnpack([]byte) ([]byte, error)
+	}
+)
+
+var xferFilterMap = struct {
+	idMap map[byte]XferFilter
+}{
+	idMap: make(map[byte]XferFilter),
+}
+```
+
+该包设计与`teleport/codec`包类似，`xferFilterMap`为注册中心，提供注册与查询功能。

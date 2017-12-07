@@ -313,7 +313,7 @@ type (
 )
 ```
 
-### 3 Codec包
+### 3 Codec编解码器
 
 `teleport/codec`包用于`socket.Packet.body`的编解码器。如TP已经自带注册了JSON、Protobuf、String三种编解码器。
 
@@ -392,7 +392,7 @@ func GetByName(name string) (Codec, error) {
 
 	Go语法允许我们在声明变量时临时定义类型并赋值。因为`codecMap`所属类型只会有一个全局唯一的实例，且不会用于其他变量类型声明上，所以直接在声明变量时声明类型可以令代码更简洁。
 
-### 4 Xfer包
+### 4 Xfer数据传输处理管道
 
 `teleport/xfer`包用于对数据包进行一系列自定义处理加工，如gzip压缩、加密、校验等。
 
@@ -420,4 +420,29 @@ var xferFilterMap = struct {
 }
 ```
 
-该包设计与`teleport/codec`包类似，`xferFilterMap`为注册中心，提供注册与查询功能。
+该包设计与`teleport/codec`包类似，`xferFilterMap`为注册中心，提供注册、查询、执行等功能。
+
+
+### 5 Peer端点
+
+Peer结构体是TP的一个通信端点，它可以是服务端也可以是客户端，甚至可以同时是服务端与客户端。因此，TP是端对端对等通信的。
+
+```go
+type Peer struct {
+	PullRouter *Router
+	PushRouter *Router
+
+	// Has unexported fields.
+}
+func NewPeer(cfg *PeerConfig, plugin ...Plugin) *Peer
+func (p *Peer) Close() (err error)
+func (p *Peer) CountSession() int
+func (p *Peer) Dial(addr string, protoFunc ...socket.ProtoFunc) (Session, *Rerror)
+func (p *Peer) DialContext(ctx context.Context, addr string, protoFunc ...socket.ProtoFunc) (Session, *Rerror)
+func (p *Peer) GetSession(sessionId string) (Session, bool)
+func (p *Peer) Listen(protoFunc ...socket.ProtoFunc) error
+func (p *Peer) RangeSession(fn func(sess Session) bool)
+func (p *Peer) ServeConn(conn net.Conn, protoFunc ...socket.ProtoFunc) (Session, error)
+```
+*以上代码是在teleport目录下执行`go doc Peer`获得*
+

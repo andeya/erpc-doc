@@ -595,7 +595,7 @@ UnknownPushHandler Type:
 func(ctx UnknownPushCtx)
 ```
 
-#### 6.4 Handler构造
+#### 6.4 Handler的构造
 
 ```go
 // Handler pull or push handler type info
@@ -619,17 +619,11 @@ func pullHandlersMaker(pathPrefix string, ctrlStruct interface{}, pluginContaine
 		ctype    = reflect.TypeOf(ctrlStruct)
 		handlers = make([]*Handler, 0, 1)
 	)
-
 	...
-
 	var ctypeElem = ctype.Elem()
-	
 	...
-
 	iType, ok := ctypeElem.FieldByName("PullCtx")
-	
 	...
-
 	var pullCtxOffset = iType.Offset
 
 	if pluginContainer == nil {
@@ -656,9 +650,7 @@ func pullHandlersMaker(pathPrefix string, ctrlStruct interface{}, pluginContaine
 		method := ctype.Method(m)
 		mtype := method.Type
 		mname := method.Name
-
 		...
-
 		var methodFunc = method.Func
 		var handleFunc = func(ctx *readHandleCtx, argValue reflect.Value) {
 			obj := pool.Get().(*PullCtrlValue)

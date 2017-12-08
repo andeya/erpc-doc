@@ -498,13 +498,15 @@ func (r *Router) Group(pathPrefix string, plugin ...Plugin) *Router
 func (r *Router) Reg(ctrlStruct interface{}, plugin ...Plugin)
 func (r *Router) SetUnknown(unknownHandler interface{}, plugin ...Plugin)
 
+```
+1.Router结构体根据HandlersMaker（Handler的构造函数）的不同，分别实现了`PullRouter`和`PushRouter`两类路由。
+
+```go
 // HandlersMaker makes []*Handler
 type HandlersMaker func(pathPrefix string, ctrlStruct interface{}, pluginContainer PluginContainer) ([]*Handler, error)
 ```
 
-1. Router结构体根据HandlersMaker（Handler的构造函数）的不同，分别实现了`PullRouter`和`PushRouter`两类路由。
-
-2. 路由分组的实现：
+2.路由分组的实现：
 
 ```go
 // Group add handler group.

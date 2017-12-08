@@ -595,7 +595,7 @@ UnknownPushHandler Type:
 func(ctx UnknownPushCtx)
 ```
 
-#### 6.4 Handler操作的封装
+#### 6.4 Handler构造
 
 ```go
 // Handler pull or push handler type info

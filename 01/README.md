@@ -427,6 +427,8 @@ var xferFilterMap = struct {
 
 Peer结构体是TP的一个通信端点，它可以是服务端也可以是客户端，甚至可以同时是服务端与客户端。因此，TP是端对端对等通信的。
 
+#### 5.1 定义
+
 ```go
 type Peer struct {
 	PullRouter *Router
@@ -446,7 +448,7 @@ func (p *Peer) ServeConn(conn net.Conn, protoFunc ...socket.ProtoFunc) (Session,
 ```
 *以上代码是在teleport目录下执行`go doc Peer`获得*
 
-Peer配置信息如下：
+#### 5.2 Peer配置信息
 
 ```go
 type PeerConfig struct {
@@ -463,7 +465,7 @@ type PeerConfig struct {
 }
 ```
 
-Peer的功能列表：
+#### 5.3 Peer的功能列表
 
 - 提供路由功能
 - 作为服务端可同时支持监听多个地址端口
@@ -475,9 +477,9 @@ Peer的功能列表：
 - 支持打印body
 - 支持在运行日志中增加耗时统计
 
-### Handler与Router
+### 6 Handler与Router
 
-Handler：
+#### 6.1 Handler
 
 TP是对等通信，不是强制的C/S模型，因此Handler也不是Peer作为服务端时专有的，它是通用的。用于处理来自对端的消息（如`PULL`或`PUSH`类消息）
 
@@ -494,7 +496,7 @@ Handler struct {
 }
 ```
 
-Router路由：
+#### 6.2 Router路由
 
 ```go
 type Router struct {
@@ -512,7 +514,7 @@ func (r *Router) Reg(ctrlStruct interface{}, plugin ...Plugin)
 func (r *Router) SetUnknown(unknownHandler interface{}, plugin ...Plugin)
 ```
 
-Handler构造函数：
+#### 6.3 Handler构造函数
 
 ```go
 // HandlersMaker makes []*Handler
@@ -521,7 +523,7 @@ type HandlersMaker func(pathPrefix string, ctrlStruct interface{}, pluginContain
 
 Router结构体根据HandlersMaker的不同，分别实现了`PullRouter`和`PushRouter`两类路由。
 
-路由分组的实现：
+#### 6.4 路由分组的实现：
 
 ```go
 // Group add handler group.

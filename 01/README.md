@@ -28,12 +28,14 @@
 
 **[svg file](https://github.com/henrylee2cn/teleport/raw/master/doc/tp_socket_torch.svg)**
 
+<!-- - 案例
+TP目前应用于小恩爱app长连接网关，支撑聊天、推送、微服务代理等功能。
+1条连接平均占用 25.6KB，即16GB内存承载655,360连接 -->
 
 |目 录
 |--------------------------------
 |[1. TP的架构设计](#1-tp的架构设计)
 |[2. Socket包](#2-socket包)
-
 
 ### 1. TP的架构设计
 
@@ -595,7 +597,6 @@ func(ctx UnknownPushCtx)
 
 #### 6.4 Handler操作的封装
 
-
 ```go
 // Handler pull or push handler type info
 Handler struct {
@@ -608,6 +609,98 @@ Handler struct {
 	pluginContainer   PluginContainer
 }
 ```
+
+通过`HandlersMaker`对Controller的各个方法的解析，构造出相应数量的Handler。以`pullHandlersMaker`函数为例：
+
+
+```go
+func pullHandlersMaker(pathPrefix string, ctrlStruct interface{}, pluginContainer PluginContainer) ([]*Handler, error) {
+	var (
+		ctype    = reflect.TypeOf(ctrlStruct)
+		handlers = make([]*Handler, 0, 1)
+	)
+
+	...
+
+	var ctypeElem = ctype.Elem()
+	
+	...
+
+	iType, ok := ctypeElem.FieldByName("PullCtx")
+	
+	...
+
+	var pullCtxOffset = iType.Offset
+
+	if pluginContainer == nil {
+		pluginContainer = newPluginContainer()
+	}
+
+	type PullCtrlValue struct {
+		ctrl   reflect.Value
+		ctxPtr *PullCtx
+	}
+	var pool = &sync.Pool{
+		New: func() interface{} {
+			ctrl := reflect.New(ctypeElem)
+			pullCtxPtr := ctrl.Pointer() + pullCtxOffset
+			ctxPtr := (*PullCtx)(unsafe.Pointer(pullCtxPtr))
+			return &PullCtrlValue{
+				ctrl:   ctrl,
+				ctxPtr: ctxPtr,
+			}
+		},
+	}
+
+	for m := 0; m < ctype.NumMethod(); m++ {
+		method := ctype.Method(m)
+		mtype := method.Type
+		mname := method.Name
+
+		...
+
+		var methodFunc = method.Func
+		var handleFunc = func(ctx *readHandleCtx, argValue reflect.Value) {
+			obj := pool.Get().(*PullCtrlValue)
+			*obj.ctxPtr = ctx
+			rets := methodFunc.Call([]reflect.Value{obj.ctrl, argValue})
+			ctx.output.SetBody(rets[0].Interface())
+			rerr, _ := rets[1].Interface().(*Rerror)
+			if rerr != nil {
+				rerr.SetToMeta(ctx.output.Meta())
+
+			} else if ctx.output.Body() != nil && ctx.output.BodyCodec() == codec.NilCodecId {
+				ctx.output.SetBodyCodec(ctx.input.BodyCodec())
+			}
+			pool.Put(obj)
+		}
+
+		handlers = append(handlers, &Handler{
+			name:            path.Join(pathPrefix, ctrlStructSnakeName(ctype), goutil.SnakeString(mname)),
+			handleFunc:      handleFunc,
+			argElem:         argType.Elem(),
+			reply:           replyType,
+			pluginContainer: pluginContainer,
+		})
+	}
+	return handlers, nil
+}
+```
+
+**该函数中用到的Go技巧：**
+
+- 对不可变的部分进行预计算获得闭包变量，抽离可变部分的逻辑构造多个`handleFunc`子函数。在路由处理过程中直接执行这些子函数可达到显著提升性能的目的
+- 使用反射来创建任意类型的实例并调用其方法，适用于类型或方法不固定的情况
+- 使用对象池来复用`PullCtrlValue`，可以降低GC开销与内存占用
+- 通过unsafe获取`ctrlStruct.PullCtx`字段的指针偏移量，进而可以快速获取该字段的值
+
+
+
+
+
+
+
+
 
 
 

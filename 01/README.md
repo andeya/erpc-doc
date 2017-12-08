@@ -423,7 +423,7 @@ var xferFilterMap = struct {
 该包设计与`teleport/codec`包类似，`xferFilterMap`为注册中心，提供注册、查询、执行等功能。
 
 
-### 5 Peer端点
+### 5 Peer通信端点
 
 Peer结构体是TP的一个通信端点，它可以是服务端也可以是客户端，甚至可以同时是服务端与客户端。因此，TP是端对端对等通信的。
 
@@ -477,26 +477,11 @@ type PeerConfig struct {
 - 支持打印body
 - 支持在运行日志中增加耗时统计
 
-### 6 Handler与Router
+### 6 路由、控制器与操作
 
-#### 6.1 Handler
+TP是对等通信，路由不再是服务端的专利，只要是Peer端点就支持注册`PULL`和`PUSH`这两类消息处理路由。
 
-TP是对等通信，不是强制的C/S模型，因此Handler也不是Peer作为服务端时专有的，它是通用的。用于处理来自对端的消息（如`PULL`或`PUSH`类消息）
-
-```go
-// Handler pull or push handler type info
-Handler struct {
-	name              string
-	isUnknown         bool
-	argElem           reflect.Type
-	reply             reflect.Type // only for pull handler doc
-	handleFunc        func(*readHandleCtx, reflect.Value)
-	unknownHandleFunc func(*readHandleCtx)
-	pluginContainer   PluginContainer
-}
-```
-
-#### 6.2 Router路由
+#### 6.1 Router路由
 
 ```go
 type Router struct {
@@ -512,18 +497,14 @@ type Router struct {
 func (r *Router) Group(pathPrefix string, plugin ...Plugin) *Router
 func (r *Router) Reg(ctrlStruct interface{}, plugin ...Plugin)
 func (r *Router) SetUnknown(unknownHandler interface{}, plugin ...Plugin)
-```
 
-#### 6.3 Handler构造函数
-
-```go
 // HandlersMaker makes []*Handler
 type HandlersMaker func(pathPrefix string, ctrlStruct interface{}, pluginContainer PluginContainer) ([]*Handler, error)
 ```
 
-Router结构体根据HandlersMaker的不同，分别实现了`PullRouter`和`PushRouter`两类路由。
+1. Router结构体根据HandlersMaker（Handler的构造函数）的不同，分别实现了`PullRouter`和`PushRouter`两类路由。
 
-#### 6.4 路由分组的实现：
+2. 路由分组的实现：
 
 ```go
 // Group add handler group.
@@ -542,4 +523,89 @@ func (r *Router) Group(pathPrefix string, plugin ...Plugin) *Router {
 	}
 }
 ```
+
+思路很简单，用法很也简单，核心点只有两个：
+
+- 继承各级路由的共享字段：`handlers`、`unknownApiType`、`maker`
+- 在上级路由节点的`pathPrefix`、`pluginContainer`字段基础上追加当前节点信息
+
+
+#### 6.2 控制器
+
+控制器是指用于提供Handler操作的结构体。
+
+PullController Model:
+
+```go
+type Aaa struct {
+	tp.PullCtx
+}
+// XxZz register the route: /aaa/xx_zz
+func (x *Aaa) XxZz(args *<T>) (<T>, *tp.Rerror) {
+	...
+	return r, nil
+}
+// YyZz register the route: /aaa/yy_zz
+func (x *Aaa) YyZz(args *<T>) (<T>, *tp.Rerror) {
+	...
+	return r, nil
+}
+```
+
+PushController Model:
+
+```go
+type Bbb struct {
+	tp.PushCtx
+}
+// XxZz register the route: /bbb/yy_zz
+func (b *Bbb) XxZz(args *<T>) {
+	...
+	return r, nil
+}
+// YyZz register the route: /bbb/yy_zz
+func (b *Bbb) YyZz(args *<T>) {
+	...
+	return r, nil
+}
+```
+
+TP的路由路径采用类似URL的格式，并且支持query参数（如`/a/b?n=1&m=e`）
+
+#### 6.3 Unknown操作函数
+
+TP可通过`func (r *Router) SetUnknown(unknownHandler interface{}, plugin ...Plugin)`方法设置默认Handler，用于处理未找到路由的`PULL`或`PUSH`消息。
+
+UnknownPullHandler Type:
+
+```go
+func(ctx UnknownPullCtx) (interface{}, *Rerror) {
+	...
+	return r, nil
+}
+```
+
+UnknownPushHandler Type:
+
+```go
+func(ctx UnknownPushCtx)
+```
+
+#### 6.4 Handler操作的封装
+
+
+```go
+// Handler pull or push handler type info
+Handler struct {
+	name              string
+	isUnknown         bool
+	argElem           reflect.Type
+	reply             reflect.Type // only for pull handler doc
+	handleFunc        func(*readHandleCtx, reflect.Value)
+	unknownHandleFunc func(*readHandleCtx)
+	pluginContainer   PluginContainer
+}
+```
+
+
 

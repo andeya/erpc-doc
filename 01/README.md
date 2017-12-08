@@ -191,9 +191,10 @@ func WithPtype(ptype byte) PacketSetting {
 ```
 
 
-- ***Go技巧思考：实际上`Header`和`Body`两个接口都是由`Packet`结构体实现，那么为什么不直接定义两个子结构体？***
-	1. `Packet`只是用于定义统一的数据包内容元素，并给予任何关于数据结构方面（协议）的暗示、误导。因此不应该使用子结构体
-	2. `Packet`全部字段均不可导出，可以增强框架对其用法的掌控力，避免开发者作出不恰当操作
+- ***Go技巧思考：实际上`Header`和`Body`两个接口都是由`Packet`结构体实现，那么为什么不直接使用`Packet`或者定义两个子结构体？***
+	1. 使用接口可以达到限制调用方法的目的，不同情况下使用不同方法集，可以有效降低开发者使用的心智负担
+	2. 在语义上，`Packet`只是用于定义统一的数据包内容元素，并未给予任何关于数据结构方面（协议）的暗示、误导。因此不应该使用子结构体
+	3. `Packet`全部字段均不可导出，可以增强框架对其用法的掌控力，避免开发者作出不恰当操作
 
 
 #### 2.2 Socket源码片段分析
@@ -681,18 +682,72 @@ func pullHandlersMaker(pathPrefix string, ctrlStruct interface{}, pluginContaine
 
 **该函数中用到的Go技巧：**
 
-- 对不可变的部分进行预计算获得闭包变量，抽离可变部分的逻辑构造多个`handleFunc`子函数。在路由处理过程中直接执行这些子函数可达到显著提升性能的目的
+- 对不可变的部分进行预处理获得闭包变量，抽离可变部分的逻辑构造子函数。在路由处理过程中直接执行这些`handleFunc`子函数可达到显著提升性能的目的
 - 使用反射来创建任意类型的实例并调用其方法，适用于类型或方法不固定的情况
 - 使用对象池来复用`PullCtrlValue`，可以降低GC开销与内存占用
 - 通过unsafe获取`ctrlStruct.PullCtx`字段的指针偏移量，进而可以快速获取该字段的值
 
+### 7 Session会话
+
+Session是封装了socket连接的会话管理实例。它使用一个包外不可见的结构体`session`来实现会话相关的三个接口：
+`PreSession`、`Session`、`PostSession`。（此处session实现多接口的做法类似于Packet）
 
 
+```go
+type (
+	PreSession interface {
+		...
+	}
+	Session interface {
+		// SetId sets the session id.
+		SetId(newId string)
+		// Close closes the session.
+		Close() error
+		// Id returns the session id.
+		Id() string
+		// IsOk checks if the session is ok.
+		IsOk() bool
+		// Peer returns the peer.
+		Peer() *Peer
+		// GoPull sends a packet and receives reply asynchronously.
+		// If the args is []byte or *[]byte type, it can automatically fill in the body codec name.
+		GoPull(uri string, args interface{}, reply interface{}, done chan *PullCmd, setting ...socket.PacketSetting)
+		// Pull sends a packet and receives reply.
+		// If the args is []byte or *[]byte type, it can automatically fill in the body codec name.
+		Pull(uri string, args interface{}, reply interface{}, setting ...socket.PacketSetting) *PullCmd
+		// Push sends a packet, but do not receives reply.
+		// If the args is []byte or *[]byte type, it can automatically fill in the body codec name.
+		Push(uri string, args interface{}, setting ...socket.PacketSetting) *Rerror
+		// ReadTimeout returns readdeadline for underlying net.Conn.
+		ReadTimeout() time.Duration
+		// RemoteIp returns the remote peer ip.
+		RemoteIp() string
+		// LocalIp returns the local peer ip.
+		LocalIp() string
+		// ReadTimeout returns readdeadline for underlying net.Conn.
+		SetReadTimeout(duration time.Duration)
+		// WriteTimeout returns writedeadline for underlying net.Conn.
+		SetWriteTimeout(duration time.Duration)
+		// Socket returns the Socket.
+		// Socket() socket.Socket
+		// WriteTimeout returns writedeadline for underlying net.Conn.
+		WriteTimeout() time.Duration
+		// Public returns temporary public data of session(socket).
+		Public() goutil.Map
+		// PublicLen returns the length of public data of session(socket).
+		PublicLen() int
+	}
+	PostSession interface {
+		...
+	}
+	session struct {
+		...
+	}
+)
+```
 
+Session采用读写异步的方式处理通信消息。在创建Session后，立即启动一个循环读取数据包的协程，并为每个成功读取的数据包创建一个处理协程。
 
+而写操作则是由session.Pull、session.Push或者Handler三种方式来触发执行。
 
-
-
-
-
-
+在以客户端角色执行PULL请求时，Session支持同步和异步两种方式。这是Go的一种经典的兼容同步异步调用的技巧：

@@ -446,3 +446,73 @@ func (p *Peer) ServeConn(conn net.Conn, protoFunc ...socket.ProtoFunc) (Session,
 ```
 *以上代码是在teleport目录下执行`go doc Peer`获得*
 
+Peer配置信息如下：
+
+```go
+type PeerConfig struct {
+	TlsCertFile         string
+	TlsKeyFile          string
+	DefaultReadTimeout  time.Duration
+	DefaultWriteTimeout time.Duration
+	SlowCometDuration   time.Duration
+	DefaultBodyCodec    string
+	PrintBody           bool
+	CountTime           bool
+	DefaultDialTimeout  time.Duration
+	ListenAddrs         []string
+}
+```
+
+Peer的功能列表：
+
+- 提供路由功能
+- 作为服务端可同时支持监听多个地址端口
+- 作为客户端可与任意服务端建立连接
+- 提供会话查询功能
+- 支持TLS证书安全加密
+- 设置默认的建立连接和读、写超时
+- 慢响应阀值（超出后运行日志由INFO提升为WARN）
+- 支持打印body
+- 支持在运行日志中增加耗时统计
+
+### Handler与Router
+
+Handler：
+
+TP是对等通信，不是强制的C/S模型，因此Handler也不是Peer作为服务端时专有的，它是通用的。用于处理来自对端的消息（如`PULL`或`PUSH`类消息）
+
+```go
+// Handler pull or push handler type info
+Handler struct {
+	name              string
+	isUnknown         bool
+	argElem           reflect.Type
+	reply             reflect.Type // only for pull handler doc
+	handleFunc        func(*readHandleCtx, reflect.Value)
+	unknownHandleFunc func(*readHandleCtx)
+	pluginContainer   PluginContainer
+}
+```
+
+Router路由：
+
+```go
+type Router struct {
+	handlers       map[string]*Handler
+	unknownApiType **Handler
+	// only for register router
+	pathPrefix      string
+	pluginContainer PluginContainer
+	typ             string
+	maker           HandlersMaker
+}
+```
+
+Handler构造函数：
+
+```go
+// HandlersMaker makes []*Handler
+type HandlersMaker func(pathPrefix string, ctrlStruct interface{}, pluginContainer PluginContainer) ([]*Handler, error)
+```
+
+Router结构体根据HandlersMaker的不同，分别实现了`PullRouter`和`PushRouter`两类路由。

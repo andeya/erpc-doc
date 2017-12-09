@@ -751,3 +751,177 @@ Session采用读写异步的方式处理通信消息。在创建Session后，立
 而写操作则是由session.Pull、session.Push或者Handler三种方式来触发执行。
 
 在以客户端角色执行PULL请求时，Session支持同步和异步两种方式。这是Go的一种经典的兼容同步异步调用的技巧：
+
+```go
+func (s *session) GoPull(uri string, args interface{}, reply interface{}, done chan *PullCmd, setting ...socket.PacketSetting) {
+	...
+	cmd := &PullCmd{
+		sess:     s,
+		output:   output,
+		reply:    reply,
+		doneChan: done,
+		start:    s.peer.timeNow(),
+		public:   goutil.RwMap(),
+	}
+	...
+	if err := s.write(output); err != nil {
+		cmd.rerr = rerror_writeFailed.Copy()
+		cmd.rerr.Detail = err.Error()
+		cmd.done()
+		return
+	}
+	s.peer.pluginContainer.PostWritePull(cmd)
+}
+
+// Pull sends a packet and receives reply.
+// If the args is []byte or *[]byte type, it can automatically fill in the body codec name.
+func (s *session) Pull(uri string, args interface{}, reply interface{}, setting ...socket.PacketSetting) *PullCmd {
+	doneChan := make(chan *PullCmd, 1)
+	s.GoPull(uri, args, reply, doneChan, setting...)
+	pullCmd := <-doneChan
+	close(doneChan)
+	return pullCmd
+}
+```
+
+实现步骤：
+
+1. 在返回结果的结构体中绑定一个chan管道
+2. 在另一个协程中进行结果计算
+3. 将该chan做为返回值返回给调用者
+4. 将计算结果写入该chan中
+5. 调用者从chan中读出该结果
+6. （同步方式是对异步方式的封装，等待从chan中读到结果后，再将该结果作为返回值返回）
+
+
+### 8 Context上下文
+
+类似常见的Go HTTP框架，TP同样提供了Context上下文。它携带Handler操作相关的参数，如Peer、Session、Packet、PublicData等。
+
+根据调用场景的不同，定义不同接口来限制其方法列表。
+
+此外，TP的平滑关闭、平滑重启也是建立在对Context的使用状态监控的基础上。
+
+```go
+type (
+	PushCtx interface {
+		...
+	}
+	PullCtx interface {
+		...
+	}
+	UnknownPushCtx interface {
+		...
+	}
+	UnknownPullCtx interface {
+		...
+	}
+	WriteCtx interface {
+		...
+	}
+	ReadCtx interface {
+		...
+	}
+	readHandleCtx struct {
+		sess            *session
+		input           *socket.Packet
+		output          *socket.Packet
+		apiType         *Handler
+		arg             reflect.Value
+		pullCmd         *PullCmd
+		uri             *url.URL
+		query           url.Values
+		public          goutil.Map
+		start           time.Time
+		cost            time.Duration
+		pluginContainer PluginContainer
+		next            *readHandleCtx
+	}
+)
+```
+
+### 9 Plugin插件
+
+TP提供了插件功能，具有完备的挂载点，便于开发者实现丰富的功能。例如身份认证、心跳、微服务注册中心、信息统计等等。
+
+```go
+type (
+	Plugin interface {
+		Name() string
+	}
+	PostRegPlugin interface {
+		Plugin
+		PostReg(*Handler) *Rerror
+	}
+	PostDialPlugin interface {
+		Plugin
+		PostDial(PreSession) *Rerror
+	}
+	...
+	PostReadReplyBodyPlugin interface {
+		Plugin
+		PostReadReplyBody(ReadCtx) *Rerror
+	}
+	...
+	// PluginContainer plugin container that defines base methods to manage plugins.
+	PluginContainer interface {
+		Add(plugins ...Plugin) error
+		Remove(pluginName string) error
+		GetByName(pluginName string) Plugin
+		GetAll() []Plugin
+		PostReg(*Handler) *Rerror
+		PostDial(PreSession) *Rerror
+		...
+		PostReadReplyBody(ReadCtx) *Rerror
+		...
+		cloneAdd(...Plugin) (PluginContainer, error)
+	}
+	pluginContainer struct {
+		plugins []Plugin
+	}
+)
+
+func (p *pluginContainer) PostReg(h *Handler) *Rerror {
+	var rerr *Rerror
+	for _, plugin := range p.plugins {
+		if _plugin, ok := plugin.(PostRegPlugin); ok {
+			if rerr = _plugin.PostReg(h); rerr != nil {
+				Fatalf("%s-PostRegPlugin(%s)", plugin.Name(), rerr.String())
+				return rerr
+			}
+		}
+	}
+	return nil
+}
+func (p *pluginContainer) PostDial(sess PreSession) *Rerror {
+	var rerr *Rerror
+	for _, plugin := range p.plugins {
+		if _plugin, ok := plugin.(PostDialPlugin); ok {
+			if rerr = _plugin.PostDial(sess); rerr != nil {
+				Debugf("dial fail (addr: %s, id: %s): %s-PostDialPlugin(%s)", sess.RemoteIp(), sess.Id(), plugin.Name(), rerr.String())
+				return rerr
+			}
+		}
+	}
+	return nil
+}
+func (p *pluginContainer) PostReadReplyBody(ctx ReadCtx) *Rerror {
+	var rerr *Rerror
+	for _, plugin := range p.plugins {
+		if _plugin, ok := plugin.(PostReadReplyBodyPlugin); ok {
+			if rerr = _plugin.PostReadReplyBody(ctx); rerr != nil {
+				Errorf("%s-PostReadReplyBodyPlugin(%s)", plugin.Name(), rerr.String())
+				return rerr
+			}
+		}
+	}
+	return nil
+}
+```
+
+Go接口断言的灵活运用，实现插件及其管理容器：
+
+1. 定义基础接口并创建统一管理容器
+2. 在实现基础接口的基础上，增加个性化接口（具体挂载点）的实现，将其注册进基础接口管理容器
+3. 管理容器使用断言的方法筛选出指定挂载点的插件并执行
+

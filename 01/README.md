@@ -83,35 +83,13 @@ TP定位于提供socket通信解决方案，遵循以下三点设计理念。
 
 `telepot/socket`包在net.Conn的基础上增加自定义包协议、传输管道等功能，是TP的基础通信包。
 
-#### 2.1 Packet源码片段分析
+#### 2.1 Packet数据包统一内容
 
 ```go
 type (
 	// Packet a socket data packet.
-	Packet struct {
-		// packet sequence
-		seq uint64
-		// packet type, such as PULL, PUSH, REPLY
-		ptype byte
-		// URL string
-		uri string
-		// metadata
-		meta *utils.Args
-		// body codec type
-		bodyCodec byte
-		// body object
-		body interface{}
-		// newBodyFunc creates a new body by packet type and URI.
-		// Note:
-		//  only for writing packet;
-		//  should be nil when reading packet.
-		newBodyFunc NewBodyFunc
-		// XferPipe transfer filter pipe, handlers from outer-most to inner-most.
-		// Note: the length can not be bigger than 255!
-		xferPipe *xfer.XferPipe
-		// packet size
-		size uint32
-		next *Packet
+	type Packet struct {
+		// Has unexported fields.
 	}
 	// packet header interface
 	Header interface {
@@ -152,13 +130,41 @@ type (
 		// UnmarshalBody unmarshal the encoded data to the existed body.
 		UnmarshalBody(bodyBytes []byte) error
 	}
-
 	// NewBodyFunc creates a new body by header.
 	NewBodyFunc func(Header) interface{}
 )
+
+func GetPacket(settings ...PacketSetting) *Packet
+func NewPacket(settings ...PacketSetting) *Packet
+func (p *Packet) AppendXferPipeFrom(src *Packet)
+func (p *Packet) Body() interface{}
+func (p *Packet) BodyCodec() byte
+func (p *Packet) MarshalBody() ([]byte, error)
+func (p *Packet) Meta() *utils.Args
+func (p *Packet) Ptype() byte
+func (p *Packet) Reset(settings ...PacketSetting)
+func (p *Packet) Seq() uint64
+func (p *Packet) SetBody(body interface{})
+func (p *Packet) SetBodyCodec(bodyCodec byte)
+func (p *Packet) SetMeta(meta *utils.Args)
+func (p *Packet) SetNewBody(newBodyFunc NewBodyFunc)
+func (p *Packet) SetPtype(ptype byte)
+func (p *Packet) SetSeq(seq uint64)
+func (p *Packet) SetSize(size uint32) error
+func (p *Packet) SetUri(uri string)
+func (p *Packet) Size() uint32
+func (p *Packet) String() string
+func (p *Packet) UnmarshalBody(bodyBytes []byte) error
+func (p *Packet) UnmarshalNewBody(bodyBytes []byte) error
+func (p *Packet) Uri() string
+func (p *Packet) XferPipe() *xfer.XferPipe
 ```
 
-- **编译期校验`Packet`是否已实现`Header`与`Body`接口的技巧**
+#### > **Go技巧分享**
+
+1.&nbsp;以上代码是在teleport目录下执行`go doc Packet`获得
+
+2.&nbsp;编译期校验`Packet`是否已实现`Header`与`Body`接口的技巧
 
 ```go
 var (
@@ -167,7 +173,7 @@ var (
 )
 ```
 
-- **一种常见的自由赋值的函数用法，用于自由设置`Packet`的字段**
+3.&nbsp;一种常见的自由赋值的函数用法，用于自由设置`Packet`的字段
 
 ```go
 // PacketSetting sets Header field.
@@ -186,18 +192,17 @@ func WithPtype(ptype byte) PacketSetting {
 		p.ptype = ptype
 	}
 }
-
 ...
 ```
 
+3.&nbsp;实际上`Header`和`Body`两个接口都是由`Packet`结构体实现，那么为什么不直接使用`Packet`或者定义两个子结构体？
 
-- ***Go技巧思考：实际上`Header`和`Body`两个接口都是由`Packet`结构体实现，那么为什么不直接使用`Packet`或者定义两个子结构体？***
 	1. 使用接口可以达到限制调用方法的目的，不同情况下使用不同方法集，可以有效降低开发者使用的心智负担
 	2. 在语义上，`Packet`只是用于定义统一的数据包内容元素，并未给予任何关于数据结构方面（协议）的暗示、误导。因此不应该使用子结构体
 	3. `Packet`全部字段均不可导出，可以增强框架对其用法的掌控力，避免开发者作出不恰当操作
 
 
-#### 2.2 Socket源码片段分析
+#### 2.2 Socket连接接口
 
 ```go
 type (
@@ -237,48 +242,17 @@ type (
 )
 ```
 
-- 关键函数与方法
+#### > **Go技巧分享**
 
+1.&nbsp;为什么要对外提供接口，而不直接公开结构体？
 
-```go
-// NewSocket wraps a net.Conn as a Socket.
-func NewSocket(c net.Conn, protoFunc ...ProtoFunc) Socket {
-	return newSocket(c, protoFunc)
-}
+`socket`结构体通过匿名字段`net.Conn`的方式“继承”了底层的连接操作方法，并基于该匿名字段创建了协议对象。
 
-func newSocket(c net.Conn, protoFuncs []ProtoFunc) *socket {
-	var s = &socket{
-		protocol: getProto(protoFuncs, c),
-		Conn:     c,
-	}
-	s.optimize()
-	return s
-}
+所以不能允许外部直接通过`socket.Conn=newConn`的方式改变连接句柄。
 
-func getProto(protoFuncs []ProtoFunc, rw io.ReadWriter) Proto {
-	if len(protoFuncs) > 0 {
-		return protoFuncs[0](rw)
-	} else {
-		return defaultProtoFunc(rw)
-	}
-}
-```
+使用`Socket`接口封装包外不可见的`socket`结构体可达到避免外部直接修改字段的目的。
 
-```go
-func (s *socket) WritePacket(packet *Packet) error {
-	s.mu.RLock()
-	protocol := s.protocol
-	s.mu.RUnlock()
-	if packet.BodyCodec() == codec.NilCodecId {
-		packet.SetBodyCodec(defaultBodyCodec.Id())
-	}
-	err := protocol.Pack(packet)
-	if err != nil && s.isActiveClosed() {
-		err = ErrProactivelyCloseSocket
-	}
-	return err
-}
-```
+2.&nbsp;读写锁遵循最小化锁定的原则，且`defer`绝不是必须的，在确定运行安全的情况下尽量避免使用有性能消耗的`defer`。
 
 ```go
 func (s *socket) ReadPacket(packet *Packet) error {
@@ -289,14 +263,7 @@ func (s *socket) ReadPacket(packet *Packet) error {
 }
 ```
 
-- ***Go技巧思考：为什么要对外提供接口，而不直接公开结构体？***
-
-	`socket`结构体通过匿名字段`net.Conn`的方式“继承”了底层的连接操作方法，并基于该匿名字段创建了协议对象。<br>所以不能允许外部直接通过`socket.Conn=newConn`的方式改变连接句柄。<br>使用`Socket`接口封装包外不可见的`socket`结构体可达到避免外部直接修改字段的目的。
-
-
-#### 2.3 Proto定义
-
-数据包封包、解包接口。即封包时以`Packet`的字段为内容元素进行数据序列化，解包时以`Packet`为内容模板进行数据的反序列化。
+#### 2.3 Proto协议接口
 
 ```go
 type (
@@ -313,14 +280,28 @@ type (
 	}
 	// ProtoFunc function used to create a custom Proto interface.
 	ProtoFunc func(io.ReadWriter) Proto
+
+	// FastProto fast socket communication protocol.
+	FastProto struct {
+		id   byte
+		name string
+		r    io.Reader
+		w    io.Writer
+		rMu  sync.Mutex
+	}
 )
 ```
 
-### 3 Codec编解码器
+#### > **Go技巧分享**
+
+1.&nbsp;将数据包的封包、解包操作封装为`Proto`接口，并定义一个默认实现（`FastProto`）。
+这是框架设计中增强可定制性的一种有效手段。开发者既可以使用默认实现，也可以根据特殊需求定制自己的个性实现。
+
+2.&nbsp;使用`Packet`屏蔽不同协议的差异性：封包时以`Packet`的字段为内容元素进行数据序列化，解包时以`Packet`为内容模板进行数据的反序列化。
+
+### 3 Codec编解码包
 
 `teleport/codec`包用于`socket.Packet.body`的编解码器。如TP已经自带注册了JSON、Protobuf、String三种编解码器。
-
-#### 3.1 Codec接口定义
 
 ```go
 type (
@@ -339,9 +320,10 @@ type (
 )
 ```
 
-#### 3.2 Codec注册中心
+#### > **Go技巧分享**
 
-- 常用的依赖注入实现方式，实现编解码器的自由定制
+
+1.&nbsp;下面`codecMap`变量的类型为什么不用关键字`type`定义？
 
 ```go
 var codecMap = struct {
@@ -351,13 +333,18 @@ var codecMap = struct {
 	nameMap: make(map[string]Codec),
 	idMap:   make(map[byte]Codec),
 }
+```
 
+Go语法允许我们在声明变量时临时定义类型并赋值。因为`codecMap`所属类型只会有一个全局唯一的实例，且不会用于其他变量类型声明上，所以直接在声明变量时声明类型可以令代码更简洁。
+
+2.&nbsp;常用的依赖注入实现方式，实现编解码器的自由定制
+
+```go
 const (
 	NilCodecId   byte   = 0
 	NilCodecName string = ""
 )
 
-// Reg registers Codec
 func Reg(codec Codec) {
 	if codec.Id() == NilCodecId {
 		panic(fmt.Sprintf("codec id can not be %d", NilCodecId))
@@ -372,7 +359,6 @@ func Reg(codec Codec) {
 	codecMap.idMap[codec.Id()] = codec
 }
 
-// Get returns Codec
 func Get(id byte) (Codec, error) {
 	codec, ok := codecMap.idMap[id]
 	if !ok {
@@ -381,7 +367,6 @@ func Get(id byte) (Codec, error) {
 	return codec, nil
 }
 
-// GetByName returns Codec
 func GetByName(name string) (Codec, error) {
 	codec, ok := codecMap.nameMap[name]
 	if !ok {
@@ -391,15 +376,9 @@ func GetByName(name string) (Codec, error) {
 }
 ```
 
-- ***Go技巧思考：变量`codecMap`的类型为什么不用关键字`type`定义？***
-
-	Go语法允许我们在声明变量时临时定义类型并赋值。因为`codecMap`所属类型只会有一个全局唯一的实例，且不会用于其他变量类型声明上，所以直接在声明变量时声明类型可以令代码更简洁。
-
 ### 4 Xfer数据传输处理管道
 
 `teleport/xfer`包用于对数据包进行一系列自定义处理加工，如gzip压缩、加密、校验等。
-
-#### 4.1 类型定义
 
 ```go
 type (
@@ -430,13 +409,10 @@ var xferFilterMap = struct {
 
 Peer结构体是TP的一个通信端点，它可以是服务端也可以是客户端，甚至可以同时是服务端与客户端。因此，TP是端对端对等通信的。
 
-#### 5.1 定义
-
 ```go
 type Peer struct {
 	PullRouter *Router
 	PushRouter *Router
-
 	// Has unexported fields.
 }
 func NewPeer(cfg *PeerConfig, plugin ...Plugin) *Peer
@@ -449,9 +425,10 @@ func (p *Peer) Listen(protoFunc ...socket.ProtoFunc) error
 func (p *Peer) RangeSession(fn func(sess Session) bool)
 func (p *Peer) ServeConn(conn net.Conn, protoFunc ...socket.ProtoFunc) (Session, error)
 ```
-*以上代码是在teleport目录下执行`go doc Peer`获得*
 
-#### 5.2 Peer配置信息
+- 通信端点介绍
+
+1.&nbsp;Peer配置信息
 
 ```go
 type PeerConfig struct {
@@ -468,7 +445,7 @@ type PeerConfig struct {
 }
 ```
 
-#### 5.3 Peer的功能列表
+2.&nbsp;Peer的功能列表
 
 - 提供路由功能
 - 作为服务端可同时支持监听多个地址端口
@@ -479,6 +456,7 @@ type PeerConfig struct {
 - 慢响应阀值（超出后运行日志由INFO提升为WARN）
 - 支持打印body
 - 支持在运行日志中增加耗时统计
+
 
 ### 6 路由、控制器与操作
 
@@ -500,16 +478,21 @@ type Router struct {
 func (r *Router) Group(pathPrefix string, plugin ...Plugin) *Router
 func (r *Router) Reg(ctrlStruct interface{}, plugin ...Plugin)
 func (r *Router) SetUnknown(unknownHandler interface{}, plugin ...Plugin)
-
 ```
-1.Router结构体根据HandlersMaker（Handler的构造函数）的不同，分别实现了`PullRouter`和`PushRouter`两类路由。
+
+#### > **Go技巧分享**	
+
+1.&nbsp;根据`maker HandlersMaker`（Handler的构造函数）字段的不同，分别实现了`PullRouter`和`PushRouter`两类路由。
 
 ```go
 // HandlersMaker makes []*Handler
 type HandlersMaker func(pathPrefix string, ctrlStruct interface{}, pluginContainer PluginContainer) ([]*Handler, error)
 ```
 
-2.路由分组的实现：
+2.&nbsp;简洁地路由分组实现：
+
+ * 继承各级路由的共享字段：`handlers`、`unknownApiType`、`maker`
+ * 在上级路由节点的`pathPrefix`、`pluginContainer`字段基础上追加当前节点信息
 
 ```go
 // Group add handler group.
@@ -528,12 +511,6 @@ func (r *Router) Group(pathPrefix string, plugin ...Plugin) *Router {
 	}
 }
 ```
-
-思路很简单，用法很也简单，核心点只有两个：
-
-- 继承各级路由的共享字段：`handlers`、`unknownApiType`、`maker`
-- 在上级路由节点的`pathPrefix`、`pluginContainer`字段基础上追加当前节点信息
-
 
 #### 6.2 控制器
 

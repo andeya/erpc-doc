@@ -516,6 +516,13 @@ func (r *Router) Group(pathPrefix string, plugin ...Plugin) *Router {
 
 控制器是指用于提供Handler操作的结构体。
 
+#### > **Go技巧分享**	
+
+1.&nbsp;Go没有泛型，我们通常使用`interface{}`空接口来代替。
+但是，空接口不能用于表示结构体的方法。
+
+下面是控制器结构体及其方法的模型定义：
+
 PullController Model:
 
 ```go
@@ -552,7 +559,79 @@ func (b *Bbb) YyZz(args *<T>) {
 }
 ```
 
-TP的路由路径采用类似URL的格式，并且支持query参数（如`/a/b?n=1&m=e`）
+以PullController为例，使用`reflect`反射包对未知类型的结构体进行模型验证：
+
+```go
+func pullHandlersMaker(pathPrefix string, ctrlStruct interface{}, pluginContainer PluginContainer) ([]*Handler, error) {
+	var (
+		ctype    = reflect.TypeOf(ctrlStruct)
+		handlers = make([]*Handler, 0, 1)
+	)
+
+	if ctype.Kind() != reflect.Ptr {
+		return nil, errors.Errorf("register pull handler: the type is not struct point: %s", ctype.String())
+	}
+
+	var ctypeElem = ctype.Elem()
+	if ctypeElem.Kind() != reflect.Struct {
+		return nil, errors.Errorf("register pull handler: the type is not struct point: %s", ctype.String())
+	}
+
+	if _, ok := ctrlStruct.(PullCtx); !ok {
+		return nil, errors.Errorf("register pull handler: the type is not implemented PullCtx interface: %s", ctype.String())
+	}
+
+	iType, ok := ctypeElem.FieldByName("PullCtx")
+	if !ok || !iType.Anonymous {
+		return nil, errors.Errorf("register pull handler: the struct do not have anonymous field PullCtx: %s", ctype.String())
+	}
+	...
+	for m := 0; m < ctype.NumMethod(); m++ {
+		method := ctype.Method(m)
+		mtype := method.Type
+		mname := method.Name
+		// Method must be exported.
+		if method.PkgPath != "" || isPullCtxType(mname) {
+			continue
+		}
+		// Method needs two ins: receiver, *args.
+		if mtype.NumIn() != 2 {
+			return nil, errors.Errorf("register pull handler: %s.%s needs one in argument, but have %d", ctype.String(), mname, mtype.NumIn())
+		}
+		// Receiver need be a struct pointer.
+		structType := mtype.In(0)
+		if structType.Kind() != reflect.Ptr || structType.Elem().Kind() != reflect.Struct {
+			return nil, errors.Errorf("register pull handler: %s.%s receiver need be a struct pointer: %s", ctype.String(), mname, structType)
+		}
+		// First arg need be exported or builtin, and need be a pointer.
+		argType := mtype.In(1)
+		if !goutil.IsExportedOrBuiltinType(argType) {
+			return nil, errors.Errorf("register pull handler: %s.%s args type not exported: %s", ctype.String(), mname, argType)
+		}
+		if argType.Kind() != reflect.Ptr {
+			return nil, errors.Errorf("register pull handler: %s.%s args type need be a pointer: %s", ctype.String(), mname, argType)
+		}
+		// Method needs two outs: reply error.
+		if mtype.NumOut() != 2 {
+			return nil, errors.Errorf("register pull handler: %s.%s needs two out arguments, but have %d", ctype.String(), mname, mtype.NumOut())
+		}
+		// Reply type must be exported.
+		replyType := mtype.Out(0)
+		if !goutil.IsExportedOrBuiltinType(replyType) {
+			return nil, errors.Errorf("register pull handler: %s.%s first reply type not exported: %s", ctype.String(), mname, replyType)
+		}
+
+		// The return type of the method must be Error.
+		if returnType := mtype.Out(1); !isRerrorType(returnType.String()) {
+			return nil, errors.Errorf("register pull handler: %s.%s second reply type %s not *tp.Rerror", ctype.String(), mname, returnType)
+		}
+		...
+	}
+	...
+}
+```
+
+2.&nbsp;参考HTTP的成熟经验，TP的路由路径采用类URL格式，且支持query参数：如`/a/b?n=1&m=e`
 
 #### 6.3 Unknown操作函数
 

@@ -457,6 +457,81 @@ type PeerConfig struct {
 - 支持打印body
 - 支持在运行日志中增加耗时统计
 
+#### > **Go技巧分享**
+
+一个Go协程大约是8KB，如在高并发服务中不加限制地频繁创建／销毁协程，很容易造成内存资源耗尽，且对GC压力也会很大。因此，TP内部采用协程资源池来管控协程，可以大大降低服务器内存与CPU的压力。（该思路源于fasthttp）
+
+协程资源池的源码实现在本人[goutil](https://github.com/henrylee2cn/goutil)库中的`github.com/henrylee2cn/goutil/pool`。下面是TP的二次封装：
+
+```go
+var (
+	_maxGoroutinesAmount      = (1024 * 1024 * 8) / 8 // max memory 8GB (8KB/goroutine)
+	_maxGoroutineIdleDuration time.Duration
+	_gopool                   *pool.GoPool
+	setGopoolOnce             sync.Once
+)
+
+// SetGopool set or reset go pool config.
+// Note: Make sure to call it before calling NewPeer() and Go()
+func SetGopool(maxGoroutinesAmount int, maxGoroutineIdleDuration time.Duration) {
+	_maxGoroutinesAmount, _maxGoroutineIdleDuration := maxGoroutinesAmount, maxGoroutineIdleDuration
+	_gopool = pool.NewGoPool(_maxGoroutinesAmount, _maxGoroutineIdleDuration)
+}
+
+// Go go func
+func Go(fn func()) bool {
+	setGopoolOnce.Do(func() {
+		if _gopool == nil {
+			SetGopool(_maxGoroutinesAmount, _maxGoroutineIdleDuration)
+		}
+	})
+	if err := _gopool.Go(fn); err != nil {
+		Warnf("%s", err.Error())
+		return false
+	}
+	return true
+}
+```
+
+每当Peer创建一个session时，都有调用上述`Go`函数进行并发执行：
+
+```go
+func (p *Peer) DialContext(ctx context.Context, addr string, protoFunc ...socket.ProtoFunc) (Session, *Rerror) {
+	...
+	Go(sess.startReadAndHandle)
+	...
+}
+func (p *Peer) listen(addr string, protoFuncs []socket.ProtoFunc) error {
+	var lis, err = listen(addr, p.tlsConfig)
+	if err != nil {
+		Fatalf("%v", err)
+	}
+	p.listens = append(p.listens, lis)
+	defer lis.Close()
+
+	Printf("listen ok (addr: %s)", addr)
+
+	var (
+		tempDelay time.Duration // how long to sleep on accept failure
+		closeCh   = p.closeCh
+	)
+	for {
+		rw, e := lis.Accept()
+		...
+		func(conn net.Conn) {
+		TRYGO:
+			if !Go(func() {
+				...
+				sess.startReadAndHandle()
+			}) {
+				time.Sleep(time.Second)
+				goto TRYGO
+			}
+		}(rw)
+	}
+}
+```
+
 
 ### 6 路由、控制器与操作
 
@@ -667,8 +742,7 @@ Handler struct {
 }
 ```
 
-通过`HandlersMaker`对Controller的各个方法的解析，构造出相应数量的Handler。以`pullHandlersMaker`函数为例：
-
+通过`HandlersMaker`对Controller各个方法进行解析，构造出相应数量的Handler。以`pullHandlersMaker`函数为例：
 
 ```go
 func pullHandlersMaker(pathPrefix string, ctrlStruct interface{}, pluginContainer PluginContainer) ([]*Handler, error) {
@@ -736,7 +810,7 @@ func pullHandlersMaker(pathPrefix string, ctrlStruct interface{}, pluginContaine
 }
 ```
 
-**该函数中用到的Go技巧：**
+#### > **Go技巧分享**	
 
 - 对不可变的部分进行预处理获得闭包变量，抽离可变部分的逻辑构造子函数。在路由处理过程中直接执行这些`handleFunc`子函数可达到显著提升性能的目的
 - 使用反射来创建任意类型的实例并调用其方法，适用于类型或方法不固定的情况
@@ -765,9 +839,9 @@ type (
 		IsOk() bool
 		// Peer returns the peer.
 		Peer() *Peer
-		// GoPull sends a packet and receives reply asynchronously.
+		// AsyncPull sends a packet and receives reply asynchronously.
 		// If the args is []byte or *[]byte type, it can automatically fill in the body codec name.
-		GoPull(uri string, args interface{}, reply interface{}, done chan *PullCmd, setting ...socket.PacketSetting)
+		AsyncPull(uri string, args interface{}, reply interface{}, done chan *PullCmd, setting ...socket.PacketSetting)
 		// Pull sends a packet and receives reply.
 		// If the args is []byte or *[]byte type, it can automatically fill in the body codec name.
 		Pull(uri string, args interface{}, reply interface{}, setting ...socket.PacketSetting) *PullCmd
@@ -806,10 +880,12 @@ Session采用读写异步的方式处理通信消息。在创建Session后，立
 
 而写操作则是由session.Pull、session.Push或者Handler三种方式来触发执行。
 
+#### > **Go技巧分享**	
+
 在以客户端角色执行PULL请求时，Session支持同步和异步两种方式。这是Go的一种经典的兼容同步异步调用的技巧：
 
 ```go
-func (s *session) GoPull(uri string, args interface{}, reply interface{}, done chan *PullCmd, setting ...socket.PacketSetting) {
+func (s *session) AsyncPull(uri string, args interface{}, reply interface{}, done chan *PullCmd, setting ...socket.PacketSetting) {
 	...
 	cmd := &PullCmd{
 		sess:     s,
@@ -833,7 +909,7 @@ func (s *session) GoPull(uri string, args interface{}, reply interface{}, done c
 // If the args is []byte or *[]byte type, it can automatically fill in the body codec name.
 func (s *session) Pull(uri string, args interface{}, reply interface{}, setting ...socket.PacketSetting) *PullCmd {
 	doneChan := make(chan *PullCmd, 1)
-	s.GoPull(uri, args, reply, doneChan, setting...)
+	s.AsyncPull(uri, args, reply, doneChan, setting...)
 	pullCmd := <-doneChan
 	close(doneChan)
 	return pullCmd
@@ -974,6 +1050,8 @@ func (p *pluginContainer) PostReadReplyBody(ctx ReadCtx) *Rerror {
 	return nil
 }
 ```
+
+#### > **Go技巧分享**	
 
 Go接口断言的灵活运用，实现插件及其管理容器：
 

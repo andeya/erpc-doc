@@ -101,7 +101,7 @@ TP定位于提供socket通信解决方案，遵循以下三点设计理念。
 
 `Packet`结构体用于定义统一的数据包内容元素，为上层架构提供稳定、统一的操作API。
 
-#### $ **Go技巧分享**
+#### $ <u>**Go技巧分享**</u>
 
 1.&nbsp;在`teleport/socket`目录下执行`go doc Packet`命令，我们可以获得以下关于`Packet`的定义、函数与方法：
 
@@ -258,7 +258,7 @@ type (
 )
 ```
 
-#### $ **Go技巧分享**
+#### $ <u>**Go技巧分享**</u>
 
 1.&nbsp;为什么要对外提供接口，而不直接公开结构体？
 
@@ -310,7 +310,7 @@ type (
 )
 ```
 
-#### $ **Go技巧分享**
+#### $ <u>**Go技巧分享**</u>
 
 1.&nbsp;将数据包的封包、解包操作封装为`Proto`接口，并定义一个默认实现（`FastProto`）。
 这是框架设计中增强可定制性的一种有效手段。开发者既可以使用默认实现，也可以根据特殊需求定制自己的个性实现。
@@ -340,7 +340,7 @@ type (
 )
 ```
 
-#### $ **Go技巧分享**
+#### $ <u>**Go技巧分享**</u>
 
 
 1.&nbsp;下面`codecMap`变量的类型为什么不用关键字`type`定义？
@@ -480,7 +480,7 @@ type PeerConfig struct {
 - 支持打印body
 - 支持在运行日志中增加耗时统计
 
-#### $ **Go技巧分享**
+#### $ <u>**Go技巧分享**</u>
 
 一个Go协程大约是8KB，如在高并发服务中不加限制地频繁创建／销毁协程，很容易造成内存资源耗尽，且对GC压力也会很大。因此，TP内部采用协程资源池来管控协程，可以大大降低服务器内存与CPU的压力。（该思路源于fasthttp）
 
@@ -578,7 +578,7 @@ func (r *Router) Reg(ctrlStruct interface{}, plugin ...Plugin)
 func (r *Router) SetUnknown(unknownHandler interface{}, plugin ...Plugin)
 ```
 
-#### $ **Go技巧分享**	
+#### $ <u>**Go技巧分享**</u>	
 
 1.&nbsp;根据`maker HandlersMaker`（Handler的构造函数）字段的不同，分别实现了`PullRouter`和`PushRouter`两类路由。
 
@@ -614,7 +614,7 @@ func (r *Router) Group(pathPrefix string, plugin ...Plugin) *Router {
 
 控制器是指用于提供Handler操作的结构体。
 
-#### $ **Go技巧分享**	
+#### $ <u>**Go技巧分享**</u>	
 
 1.&nbsp;Go没有泛型，我们通常使用`interface{}`空接口来代替。
 但是，空接口不能用于表示结构体的方法。
@@ -833,7 +833,7 @@ func pullHandlersMaker(pathPrefix string, ctrlStruct interface{}, pluginContaine
 }
 ```
 
-#### $ **Go技巧分享**	
+#### $ <u>**Go技巧分享**</u>	
 
 - 对不可变的部分进行预处理获得闭包变量，抽离可变部分的逻辑构造子函数。在路由处理过程中直接执行这些`handleFunc`子函数可达到显著提升性能的目的
 - 使用反射来创建任意类型的实例并调用其方法，适用于类型或方法不固定的情况
@@ -903,7 +903,7 @@ Session采用读写异步的方式处理通信消息。在创建Session后，立
 
 而写操作则是由session.Pull、session.Push或者Handler三种方式来触发执行。
 
-#### $ **Go技巧分享**	
+#### $ <u>**Go技巧分享**</u>	
 
 在以客户端角色执行PULL请求时，Session支持同步和异步两种方式。这是Go的一种经典的兼容同步异步调用的技巧：
 
@@ -1074,7 +1074,7 @@ func (p *pluginContainer) PostReadReplyBody(ctx ReadCtx) *Rerror {
 }
 ```
 
-#### $ **Go技巧分享**	
+#### $ <u>**Go技巧分享**</u>	
 
 Go接口断言的灵活运用，实现插件及其管理容器：
 

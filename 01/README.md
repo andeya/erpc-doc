@@ -2,9 +2,19 @@
 
 本文通过回顾[teleport](https://github.com/henrylee2cn/teleport)框架的开发过程，讲述Go Socket的开发实战经验。
 
-*注：下文以`TP`作为`Teleport`的简称。*
 
-简单的性能对比：
+本文的内容组织形式：teleport架构源码赏析+相应Go技巧分享
+
+期间，我们可以分别从这两条线进行思考与探讨。
+
+**注：**
+
+- 文中以`TP`作为`teleport`的简称
+- 文中内容针对具有一定Go语言基础的开发者
+- 文中以`Go技巧`是指高于语法常识的一些编程技巧、设计模式
+- 为压缩篇幅代码块中删除了一些空行，并用`...`表示省略行
+
+TP与其他同类框架性能的简单对比：
 
 - teleport/socket
 
@@ -34,21 +44,23 @@ TP目前应用于小恩爱app长连接网关，支撑聊天、推送、微服务
 
 |目 录
 |--------------------------------
-|[1. TP的架构设计](#1-tp的架构设计)
-|[2. Socket包](#2-socket包)
+|[第一部分 TP架构设计](#第一部分-tp架构设计)
+|[第二部分 TP关键源码赏析及相关Go技巧](#第一部分-tp关键源码赏析及相关go技巧)
 
-### 1. TP的架构设计
+----------------------------------------
 
-#### 1.1 设计理念
+## 第一部分 TP架构设计
+
+### 1 设计理念
 
 TP定位于提供socket通信解决方案，遵循以下三点设计理念。
 
-- 通用：不作定向深入，专注长连接通信
+- 通用：不做定向深入，专注长连接通信
 - 高效：高性能，低消耗
 - 灵活：用法灵活简单，易于深入定制
+- 可靠：使用接口（`interface`）而非约束说明，规定框架用法
 
-
-#### 1.2 架构图
+### 2 架构图
 
 ![Teleport-Architecture](https://github.com/henrylee2cn/teleport/raw/master/doc/teleport_architecture.png)
 
@@ -65,7 +77,7 @@ TP定位于提供socket通信解决方案，遵循以下三点设计理念。
 - `XferPipe`: 数据包字节流的编码处理管道，如压缩、加密、校验等
 
 
-#### 1.3 重要特性
+### 3 重要特性
 
 - 支持自定义通信协议和包数据处理管道
 - TCP长连接使用I/O缓冲区与多路复用技术，提升数据吞吐量
@@ -79,11 +91,13 @@ TP定位于提供socket通信解决方案，遵循以下三点设计理念。
 	- 支持设置慢操作报警阈值
 	- 提供Hander的上下文（pull、push的handler）
 
-### 2. Socket包
+----------------------------------------
+
+## 第二部分 TP关键源码赏析及相关Go技巧
 
 `telepot/socket`包在net.Conn的基础上增加自定义包协议、传输管道等功能，是TP的基础通信包。
 
-#### 2.1 Packet数据包统一内容
+### 1 Packet统一数据包元素
 
 ```go
 type (
@@ -107,8 +121,6 @@ type (
 		SetUri(string)
 		// Meta returns the metadata
 		Meta() *utils.Args
-		// SetMeta sets the metadata
-		SetMeta(*utils.Args)
 	}
 	// packet body interface
 	Body interface {
@@ -146,7 +158,6 @@ func (p *Packet) Reset(settings ...PacketSetting)
 func (p *Packet) Seq() uint64
 func (p *Packet) SetBody(body interface{})
 func (p *Packet) SetBodyCodec(bodyCodec byte)
-func (p *Packet) SetMeta(meta *utils.Args)
 func (p *Packet) SetNewBody(newBodyFunc NewBodyFunc)
 func (p *Packet) SetPtype(ptype byte)
 func (p *Packet) SetSeq(seq uint64)
@@ -195,14 +206,14 @@ func WithPtype(ptype byte) PacketSetting {
 ...
 ```
 
-3.&nbsp;实际上`Header`和`Body`两个接口都是由`Packet`结构体实现，那么为什么不直接使用`Packet`或者定义两个子结构体？
+4.&nbsp;实际上`Header`和`Body`两个接口都是由`Packet`结构体实现，那么为什么不直接使用`Packet`或者定义两个子结构体？
 
 	1. 使用接口可以达到限制调用方法的目的，不同情况下使用不同方法集，可以有效降低开发者使用的心智负担
 	2. 在语义上，`Packet`只是用于定义统一的数据包内容元素，并未给予任何关于数据结构方面（协议）的暗示、误导。因此不应该使用子结构体
 	3. `Packet`全部字段均不可导出，可以增强框架对其用法的掌控力，避免开发者作出不恰当操作
 
 
-#### 2.2 Socket连接接口
+### 2 Socket接口
 
 ```go
 type (
@@ -211,15 +222,12 @@ type (
 	// Multiple goroutines may invoke methods on a Socket simultaneously.
 	Socket interface {
 		net.Conn
-
 		// WritePacket writes header and body to the connection.
 		// Note: must be safe for concurrent use by multiple goroutines.
 		WritePacket(packet *Packet) error
-
 		// ReadPacket reads header and body from the connection.
 		// Note: must be safe for concurrent use by multiple goroutines.
 		ReadPacket(packet *Packet) error
-
 		// Public returns temporary public data of Socket.
 		Public() goutil.Map
 		// PublicLen returns the length of public data of Socket.
@@ -263,7 +271,7 @@ func (s *socket) ReadPacket(packet *Packet) error {
 }
 ```
 
-#### 2.3 Proto协议接口
+### 3 Proto协议接口
 
 ```go
 type (
@@ -299,9 +307,9 @@ type (
 
 2.&nbsp;使用`Packet`屏蔽不同协议的差异性：封包时以`Packet`的字段为内容元素进行数据序列化，解包时以`Packet`为内容模板进行数据的反序列化。
 
-### 3 Codec编解码包
+### 4 Codec编解码
 
-`teleport/codec`包用于`socket.Packet.body`的编解码器。如TP已经自带注册了JSON、Protobuf、String三种编解码器。
+`teleport/codec`包用于`socket.Packet.body`的编解码器。TP已经自带注册了JSON、Protobuf、String三种编解码器。
 
 ```go
 type (
@@ -376,7 +384,7 @@ func GetByName(name string) (Codec, error) {
 }
 ```
 
-### 4 Xfer数据传输处理管道
+### 5 Xfer数据编码管道
 
 `teleport/xfer`包用于对数据包进行一系列自定义处理加工，如gzip压缩、加密、校验等。
 
@@ -405,7 +413,7 @@ var xferFilterMap = struct {
 该包设计与`teleport/codec`包类似，`xferFilterMap`为注册中心，提供注册、查询、执行等功能。
 
 
-### 5 Peer通信端点
+### 6 Peer通信端点
 
 Peer结构体是TP的一个通信端点，它可以是服务端也可以是客户端，甚至可以同时是服务端与客户端。因此，TP是端对端对等通信的。
 
@@ -535,12 +543,9 @@ func (p *Peer) listen(addr string, protoFuncs []socket.ProtoFunc) error {
 }
 ```
 
-
-### 6 路由、控制器与操作
+### 7 Router路由器
 
 TP是对等通信，路由不再是服务端的专利，只要是Peer端点就支持注册`PULL`和`PUSH`这两类消息处理路由。
-
-#### 6.1 Router路由
 
 ```go
 type Router struct {
@@ -590,7 +595,7 @@ func (r *Router) Group(pathPrefix string, plugin ...Plugin) *Router {
 }
 ```
 
-#### 6.2 控制器
+### 8 控制器
 
 控制器是指用于提供Handler操作的结构体。
 
@@ -711,7 +716,7 @@ func pullHandlersMaker(pathPrefix string, ctrlStruct interface{}, pluginContaine
 
 2.&nbsp;参考HTTP的成熟经验，TP的路由路径采用类URL格式，且支持query参数：如`/a/b?n=1&m=e`
 
-#### 6.3 Unknown操作函数
+### 9 Unknown操作函数
 
 TP可通过`func (r *Router) SetUnknown(unknownHandler interface{}, plugin ...Plugin)`方法设置默认Handler，用于处理未找到路由的`PULL`或`PUSH`消息。
 
@@ -730,7 +735,7 @@ UnknownPushHandler Type:
 func(ctx UnknownPushCtx)
 ```
 
-#### 6.4 Handler的构造
+### 10 Handler的构造
 
 ```go
 // Handler pull or push handler type info
@@ -820,7 +825,7 @@ func pullHandlersMaker(pathPrefix string, ctrlStruct interface{}, pluginContaine
 - 使用对象池来复用`PullCtrlValue`，可以降低GC开销与内存占用
 - 通过unsafe获取`ctrlStruct.PullCtx`字段的指针偏移量，进而可以快速获取该字段的值
 
-### 7 Session会话
+### 11 Session会话
 
 Session是封装了socket连接的会话管理实例。它使用一个包外不可见的结构体`session`来实现会话相关的三个接口：
 `PreSession`、`Session`、`PostSession`。（此处session实现多接口的做法类似于Packet）
@@ -929,7 +934,7 @@ func (s *session) Pull(uri string, args interface{}, reply interface{}, setting 
 6. （同步方式是对异步方式的封装，等待从chan中读到结果后，再将该结果作为返回值返回）
 
 
-### 8 Context上下文
+### 12 Context上下文
 
 类似常见的Go HTTP框架，TP同样提供了Context上下文。它携带Handler操作相关的参数，如Peer、Session、Packet、PublicData等。
 
@@ -975,7 +980,7 @@ type (
 )
 ```
 
-### 9 Plugin插件
+### 13 Plugin插件
 
 TP提供了插件功能，具有完备的挂载点，便于开发者实现丰富的功能。例如身份认证、心跳、微服务注册中心、信息统计等等。
 

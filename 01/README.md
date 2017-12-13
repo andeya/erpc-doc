@@ -39,7 +39,7 @@ TP与其他使用长连接的框架的性能对比：
 
 - rpcx与其他框架的对比参考（图片来源于rpcx）
 
-![rpc_compare](src/rpc_compare.png)
+![rpc_compare](https://github.com/henrylee2cn/tpdoc/raw/master/01/src/rpc_compare.png)
 
 - teleport/socket火焰图
 

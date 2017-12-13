@@ -95,16 +95,56 @@ TP定位于提供socket通信解决方案，遵循以下三点设计理念。
 
 ## 第二部分 TP关键源码赏析及相关Go技巧
 
-`telepot/socket`包在net.Conn的基础上增加自定义包协议、传输管道等功能，是TP的基础通信包。
+<br>*---------------------------以下为`github.com/henrylee2cn/telepot/socket`包内容---------------------------*
 
 ### 1 Packet统一数据包元素
 
+`Packet`结构体用于定义统一的数据包内容元素，为上层架构提供稳定、统一的操作API。
+
+#### > **Go技巧分享**
+
+1.&nbsp;在`teleport/socket`目录下执行`go doc Packet`命令，我们可以获得以下关于`Packet`的定义、函数与方法：
+
+```go
+type Packet struct {
+	// Has unexported fields.
+}
+    Packet a socket data packet.
+
+func GetPacket(settings ...PacketSetting) *Packet
+func NewPacket(settings ...PacketSetting) *Packet
+func (p *Packet) AppendXferPipeFrom(src *Packet)
+func (p *Packet) Body() interface{}
+func (p *Packet) BodyCodec() byte
+func (p *Packet) MarshalBody() ([]byte, error)
+func (p *Packet) Meta() *utils.Args
+func (p *Packet) Ptype() byte
+func (p *Packet) Reset(settings ...PacketSetting)
+func (p *Packet) Seq() uint64
+func (p *Packet) SetBody(body interface{})
+func (p *Packet) SetBodyCodec(bodyCodec byte)
+func (p *Packet) SetNewBody(newBodyFunc NewBodyFunc)
+func (p *Packet) SetPtype(ptype byte)
+func (p *Packet) SetSeq(seq uint64)
+func (p *Packet) SetSize(size uint32) error
+func (p *Packet) SetUri(uri string)
+func (p *Packet) Size() uint32
+func (p *Packet) String() string
+func (p *Packet) UnmarshalBody(bodyBytes []byte) error
+func (p *Packet) UnmarshalNewBody(bodyBytes []byte) error
+func (p *Packet) Uri() string
+func (p *Packet) XferPipe() *xfer.XferPipe
+```
+
+2.&nbsp;`Packet`全部字段均不可导出，可以增强代码稳定性以及对其操作的掌控力
+
+3.&nbsp;下面是由`Packet`结构体实现的两个接口`Header`和`Body`。思考：为什么不直接使用`Packet`或者定义两个子结构体？
+
+- 使用接口可以达到限制调用方法的目的，不同情况下使用不同方法集，开发者不会因为调用了不该调用的方法而掉坑里
+- 在语义上，`Packet`只是用于定义统一的数据包内容元素，并未给予任何关于数据结构方面（协议）的暗示、误导。因此不应该使用子结构体
+
 ```go
 type (
-	// Packet a socket data packet.
-	type Packet struct {
-		// Has unexported fields.
-	}
 	// packet header interface
 	Header interface {
 		// Ptype returns the packet sequence
@@ -145,37 +185,9 @@ type (
 	// NewBodyFunc creates a new body by header.
 	NewBodyFunc func(Header) interface{}
 )
-
-func GetPacket(settings ...PacketSetting) *Packet
-func NewPacket(settings ...PacketSetting) *Packet
-func (p *Packet) AppendXferPipeFrom(src *Packet)
-func (p *Packet) Body() interface{}
-func (p *Packet) BodyCodec() byte
-func (p *Packet) MarshalBody() ([]byte, error)
-func (p *Packet) Meta() *utils.Args
-func (p *Packet) Ptype() byte
-func (p *Packet) Reset(settings ...PacketSetting)
-func (p *Packet) Seq() uint64
-func (p *Packet) SetBody(body interface{})
-func (p *Packet) SetBodyCodec(bodyCodec byte)
-func (p *Packet) SetNewBody(newBodyFunc NewBodyFunc)
-func (p *Packet) SetPtype(ptype byte)
-func (p *Packet) SetSeq(seq uint64)
-func (p *Packet) SetSize(size uint32) error
-func (p *Packet) SetUri(uri string)
-func (p *Packet) Size() uint32
-func (p *Packet) String() string
-func (p *Packet) UnmarshalBody(bodyBytes []byte) error
-func (p *Packet) UnmarshalNewBody(bodyBytes []byte) error
-func (p *Packet) Uri() string
-func (p *Packet) XferPipe() *xfer.XferPipe
 ```
 
-#### > **Go技巧分享**
-
-1.&nbsp;以上代码是在teleport目录下执行`go doc Packet`获得
-
-2.&nbsp;编译期校验`Packet`是否已实现`Header`与`Body`接口的技巧
+4.&nbsp;编译期校验`Packet`是否已实现`Header`与`Body`接口的技巧
 
 ```go
 var (
@@ -184,7 +196,7 @@ var (
 )
 ```
 
-3.&nbsp;一种常见的自由赋值的函数用法，用于自由设置`Packet`的字段
+5.&nbsp;一种常见的自由赋值的函数用法，用于自由设置`Packet`的字段
 
 ```go
 // PacketSetting sets Header field.
@@ -206,14 +218,10 @@ func WithPtype(ptype byte) PacketSetting {
 ...
 ```
 
-4.&nbsp;实际上`Header`和`Body`两个接口都是由`Packet`结构体实现，那么为什么不直接使用`Packet`或者定义两个子结构体？
-
-	1. 使用接口可以达到限制调用方法的目的，不同情况下使用不同方法集，可以有效降低开发者使用的心智负担
-	2. 在语义上，`Packet`只是用于定义统一的数据包内容元素，并未给予任何关于数据结构方面（协议）的暗示、误导。因此不应该使用子结构体
-	3. `Packet`全部字段均不可导出，可以增强框架对其用法的掌控力，避免开发者作出不恰当操作
-
 
 ### 2 Socket接口
+
+`Socket`接口是对`net.Conn`的封装，通过协议接口`Proto`对数据包内容元素`Packet`进行封包、解包与IO传输操作。
 
 ```go
 type (
@@ -273,6 +281,8 @@ func (s *socket) ReadPacket(packet *Packet) error {
 
 ### 3 Proto协议接口
 
+`Proto`接口按照实现它的具体规则，对`Packet`数据包内容元素进行封包、解包、IO等操作。
+
 ```go
 type (
 	// Proto pack/unpack protocol scheme of socket packet.
@@ -307,9 +317,11 @@ type (
 
 2.&nbsp;使用`Packet`屏蔽不同协议的差异性：封包时以`Packet`的字段为内容元素进行数据序列化，解包时以`Packet`为内容模板进行数据的反序列化。
 
+<br>*---------------------------以下为`github.com/henrylee2cn/telepot/codec`包内容---------------------------*
+
 ### 4 Codec编解码
 
-`teleport/codec`包用于`socket.Packet.body`的编解码器。TP已经自带注册了JSON、Protobuf、String三种编解码器。
+`Codec`接口是`socket.Packet.body`的编解码器。TP已默认注册了JSON、Protobuf、String三种编解码器。
 
 ```go
 type (
@@ -384,9 +396,11 @@ func GetByName(name string) (Codec, error) {
 }
 ```
 
-### 5 Xfer数据编码管道
+<br>*---------------------------以下为`github.com/henrylee2cn/telepot/xfer`包内容---------------------------*
 
-`teleport/xfer`包用于对数据包进行一系列自定义处理加工，如gzip压缩、加密、校验等。
+### 5 XferPipe数据编码管道
+
+`XferPipe`接口用于对数据包进行一系列自定义处理加工，如gzip压缩、加密、校验等。
 
 ```go
 type (
@@ -410,8 +424,9 @@ var xferFilterMap = struct {
 }
 ```
 
-该包设计与`teleport/codec`包类似，`xferFilterMap`为注册中心，提供注册、查询、执行等功能。
+`teleport/xfer`包的设计与`teleport/codec`类似，`xferFilterMap`为注册中心，提供注册、查询、执行等功能。
 
+<br>*---------------------------以下为`github.com/henrylee2cn/telepot`包内容---------------------------*
 
 ### 6 Peer通信端点
 

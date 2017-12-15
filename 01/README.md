@@ -1,18 +1,23 @@
 # Go TCP Socket编程之teleport框架是怎样炼成的？
 
-本文通过回顾[teleport](https://github.com/henrylee2cn/teleport)框架的开发过程，讲述Go Socket的开发实战经验。
+本文通过回顾 teleport (https://github.com/henrylee2cn/teleport) 框架的开发过程，讲述Go TCP Socket的开发实战经验。
 
 本文的内容组织形式：teleport架构源码赏析+相应Go技巧分享
 
 期间，我们可以分别从这两条线进行思考与探讨。
 
-**注：**
+*文中以`TP`作为`teleport`的简称<br>文中内容针对具有一定Go语言基础的开发者<br>文中以`Go技巧`是指高于语法常识的一些编程技巧、设计模式<br>为压缩篇幅代码块中删除了一些空行，并用`...`表示省略行*
 
-- teleport源码地址：https://github.com/henrylee2cn/teleport
-- 文中以`TP`作为`teleport`的简称
-- 文中内容针对具有一定Go语言基础的开发者
-- 文中以`Go技巧`是指高于语法常识的一些编程技巧、设计模式
-- 为压缩篇幅代码块中删除了一些空行，并用`...`表示省略行
+
+**关于作者**
+
+李亚川（网名：henrylee2cn）
+
+- Pholcus、Faygo、Teleport等Go语言开源项目作者
+- 自2014年起全面转向Go语言的服务端开发领域
+- 现就职于小恩爱，负责服务器底层架构与基础服务的研发工作
+- Github主页：https://github.com/henrylee2cn
+
 
 |目 录
 |--------------------------------
@@ -585,7 +590,11 @@ func (r *Router) SetUnknown(unknownHandler interface{}, plugin ...Plugin)
 
 ```go
 // HandlersMaker makes []*Handler
-type HandlersMaker func(pathPrefix string, ctrlStruct interface{}, pluginContainer PluginContainer) ([]*Handler, error)
+type HandlersMaker func(
+	pathPrefix string,
+	ctrlStruct interface{},
+	pluginContainer PluginContainer,
+) ([]*Handler, error)
 ```
 
 2.&nbsp;简洁地路由分组实现：

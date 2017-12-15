@@ -8,6 +8,7 @@
 
 **注：**
 
+- teleport源码地址：https://github.com/henrylee2cn/teleport
 - 文中以`TP`作为`teleport`的简称
 - 文中内容针对具有一定Go语言基础的开发者
 - 文中以`Go技巧`是指高于语法常识的一些编程技巧、设计模式
@@ -1082,3 +1083,6 @@ Go接口断言的灵活运用，实现插件及其管理容器：
 2. 在实现基础接口的基础上，增加个性化接口（具体挂载点）的实现，将其注册进基础接口管理容器
 3. 管理容器使用断言的方法筛选出指定挂载点的插件并执行
 
+-------------------------
+
+![原文二维码](https://github.com/henrylee2cn/tpdoc/raw/master/01/src/qrcode-viewfile.png)

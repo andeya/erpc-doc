@@ -1085,4 +1085,4 @@ Go接口断言的灵活运用，实现插件及其管理容器：
 
 -------------------------
 
-![原文二维码](https://github.com/henrylee2cn/tpdoc/raw/master/01/src/qrcode-viewfile.png)
+[原文二维码](https://github.com/henrylee2cn/tpdoc/raw/master/01/src/qrcode-viewfile.png)

@@ -1,22 +1,12 @@
-# Go TCP Socket编程之teleport框架是怎样炼成的？
+# Go Socket编程之teleport框架是怎样炼成的？
 
-本文通过回顾 teleport (https://github.com/henrylee2cn/teleport) 框架的开发过程，讲述Go TCP Socket的开发实战经验。
+本文通过回顾 teleport (https://github.com/henrylee2cn/teleport) 框架的开发过程，讲述Go Socket的开发实战经验。
 
 本文的内容组织形式：teleport架构源码赏析+相应Go技巧分享
 
 期间，我们可以分别从这两条线进行思考与探讨。
 
 *文中以`TP`作为`teleport`的简称<br>文中内容针对具有一定Go语言基础的开发者<br>文中以`Go技巧`是指高于语法常识的一些编程技巧、设计模式<br>为了压缩篇幅，代码块中删除了一些空行，并使用`...`表示省略行*
-
-
-**关于作者**
-
-李亚川（网名：henrylee2cn）
-
-- Pholcus、Faygo、Teleport等Go语言开源项目作者
-- 自2014年起全面转向Go语言的服务端开发领域
-- 现就职于小恩爱，负责服务器底层架构与基础服务的研发工作
-- Github主页：https://github.com/henrylee2cn
 
 ----------------------------------------
 
@@ -124,7 +114,7 @@ TP定位于提供socket通信解决方案，遵循以下三点设计理念。
 ### 3 重要特性
 
 - 支持自定义通信协议和包数据处理管道
-- TCP长连接使用I/O缓冲区与多路复用技术，提升数据吞吐量
+- 使用I/O缓冲区与多路复用技术，提升数据吞吐量
 - 支持设置读取包的大小限制（如果超出则断开连接）
 - 支持插件机制，可以自定义认证、心跳、微服务注册中心、统计信息插件等
 - 服务端和客户端之间对等通信，统一为peer端点，具有基本一致的用法：
@@ -906,8 +896,8 @@ type (
 		Close() error
 		// Id returns the session id.
 		Id() string
-		// IsOk checks if the session is ok.
-		IsOk() bool
+		// Health checks if the session is health.
+		Health() bool
 		// Peer returns the peer.
 		Peer() *Peer
 		// AsyncPull sends a packet and receives reply asynchronously.

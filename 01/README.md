@@ -518,9 +518,9 @@ type PeerConfig struct {
 
 #### $ <font color="#1269d3">**Go技巧分享**</font>
 
-一个Go协程大约是8KB，如在高并发服务中不加限制地频繁创建／销毁协程，很容易造成内存资源耗尽，且对GC压力也会很大。因此，TP内部采用协程资源池来管控协程，可以大大降低服务器内存与CPU的压力。（该思路源于fasthttp）
+一个Go协程的初始堆栈大小为2KB（在运行过程中可以动态扩展大小）如在高并发服务中不加限制地频繁创建／销毁协程，很容易造成内存资源耗尽，且对GC压力也会很大。因此，TP内部采用协程资源池来管控协程，可以大大降低服务器内存与CPU的压力。（该思路源于fasthttp）
 
-协程资源池的源码实现在本人[goutil](https://github.com/henrylee2cn/goutil)库中的`github.com/henrylee2cn/goutil/pool`。下面是TP的二次封装：
+协程资源池的源码实现在本人[goutil](https://github.com/henrylee2cn/goutil)库中的`github.com/henrylee2cn/goutil/pool`。下面是TP的二次封装（保守认为一个goroutine平均占用8KB）：
 
 ```go
 var (

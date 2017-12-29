@@ -73,11 +73,11 @@ TP与其他使用长连接的框架的性能对比：
 
 - rpcx与其他框架的对比参考（图片来源于rpcx）
 
-![rpc_compare](https://github.com/henrylee2cn/tpdoc/raw/master/01/src/rpc_compare.png)
+![rpc_compare](https://raw.githubusercontent.com/henrylee2cn/tpdoc/master/01/src/rpc_compare.png)
 
 - CPU火焰图 teleport/socket
 
-![tp_socket_cpu_torch](https://github.com/henrylee2cn/teleport/raw/master/doc/tp_socket_torch.png)
+![tp_socket_cpu_torch](https://raw.githubusercontent.com/henrylee2cn/teleport/master/doc/tp_socket_torch.png)
 
 **[svg file](https://github.com/henrylee2cn/teleport/raw/master/doc/tp_socket_torch.svg)**
 
@@ -96,7 +96,7 @@ TP定位于提供socket通信解决方案，遵循以下三点设计理念。
 
 ### 2 架构图
 
-![Teleport-Architecture](https://github.com/henrylee2cn/teleport/raw/master/doc/teleport_architecture.png)
+![Teleport-Architecture](https://raw.githubusercontent.com/henrylee2cn/teleport/master/doc/teleport_architecture.png)
 
 - `Peer`: 通信端点，可以是服务端或客户端
 - `Plugin`: 贯穿于通信各个环节的插件

@@ -278,6 +278,8 @@ type (
 		Id() string
 		// SetId sets the socket id.
 		SetId(string)
+		// Reset reset net.Conn and ProtoFunc.
+		Reset(netConn net.Conn, protoFunc ...ProtoFunc)
 	}
 	socket struct {
 		net.Conn

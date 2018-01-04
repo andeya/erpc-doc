@@ -474,7 +474,7 @@ type Peer struct {
 	PushRouter *Router
 	// Has unexported fields.
 }
-func NewPeer(cfg *PeerConfig, plugin ...Plugin) *Peer
+func NewPeer(cfg PeerConfig, plugin ...Plugin) *Peer
 func (p *Peer) Close() (err error)
 func (p *Peer) CountSession() int
 func (p *Peer) Dial(addr string, protoFunc ...socket.ProtoFunc) (Session, *Rerror)
@@ -500,7 +500,9 @@ type PeerConfig struct {
 	PrintBody           bool
 	CountTime           bool
 	DefaultDialTimeout  time.Duration
-	ListenAddrs         []string
+	RedialTimes         int32
+	Network             string
+	ListenAddress       string 
 }
 ```
 
@@ -563,33 +565,38 @@ func (p *Peer) DialContext(ctx context.Context, addr string, protoFunc ...socket
 	Go(sess.startReadAndHandle)
 	...
 }
-func (p *Peer) listen(addr string, protoFuncs []socket.ProtoFunc) error {
-	var lis, err = listen(addr, p.tlsConfig)
+func (p *Peer) Listen(protoFunc ...socket.ProtoFunc) error {
+	lis, err := listen(p.network, p.listenAddr, p.tlsConfig)
 	if err != nil {
 		Fatalf("%v", err)
 	}
-	p.listens = append(p.listens, lis)
 	defer lis.Close()
+	p.listen = lis
 
-	Printf("listen ok (addr: %s)", addr)
+	network := lis.Addr().Network()
+	addr := lis.Addr().String()
+	Printf("listen ok (network:%s, addr:%s)", network, addr)
 
 	var (
 		tempDelay time.Duration // how long to sleep on accept failure
 		closeCh   = p.closeCh
 	)
 	for {
-		rw, e := lis.Accept()
+		conn, e := lis.Accept()
 		...
-		func(conn net.Conn) {
-		TRYGO:
-			if !Go(func() {
+		AnywayGo(func() {
+			if c, ok := conn.(*tls.Conn); ok {
 				...
-				sess.startReadAndHandle()
-			}) {
-				time.Sleep(time.Second)
-				goto TRYGO
 			}
-		}(rw)
+			var sess = newSession(p, conn, protoFunc)
+			if rerr := p.pluginContainer.PostAccept(sess); rerr != nil {
+				sess.Close()
+				return
+			}
+			Tracef("accept session(network:%s, addr:%s) ok", network, sess.RemoteIp(), sess.Id())
+			p.sessHub.Set(sess)
+			sess.startReadAndHandle()
+		})
 	}
 }
 ```
@@ -898,7 +905,7 @@ type (
 		Close() error
 		// Id returns the session id.
 		Id() string
-		// Health checks if the session is health.
+		// Health checks if the session is ok.
 		Health() bool
 		// Peer returns the peer.
 		Peer() *Peer
@@ -906,10 +913,14 @@ type (
 		// If the args is []byte or *[]byte type, it can automatically fill in the body codec name.
 		AsyncPull(uri string, args interface{}, reply interface{}, done chan *PullCmd, setting ...socket.PacketSetting)
 		// Pull sends a packet and receives reply.
-		// If the args is []byte or *[]byte type, it can automatically fill in the body codec name.
+		// Note:
+		// If the args is []byte or *[]byte type, it can automatically fill in the body codec name;
+		// If the session is a client role and PeerConfig.RedialTimes>0, it is automatically re-called once after a failure.
 		Pull(uri string, args interface{}, reply interface{}, setting ...socket.PacketSetting) *PullCmd
 		// Push sends a packet, but do not receives reply.
-		// If the args is []byte or *[]byte type, it can automatically fill in the body codec name.
+		// Note:
+		// If the args is []byte or *[]byte type, it can automatically fill in the body codec name;
+		// If the session is a client role and PeerConfig.RedialTimes>0, it is automatically re-called once after a failure.
 		Push(uri string, args interface{}, setting ...socket.PacketSetting) *Rerror
 		// ReadTimeout returns readdeadline for underlying net.Conn.
 		ReadTimeout() time.Duration
@@ -999,6 +1010,9 @@ func (s *session) Pull(uri string, args interface{}, reply interface{}, setting 
 
 ```go
 type (
+	BackgroundCtx interface {
+		...
+	}
 	PushCtx interface {
 		...
 	}

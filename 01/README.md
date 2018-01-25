@@ -96,7 +96,7 @@ TP定位于提供socket通信解决方案，遵循以下三点设计理念。
 
 ### 2 架构图
 
-![Teleport-Architecture](https://raw.githubusercontent.com/henrylee2cn/teleport/master/doc/teleport_architecture.png)
+![Teleport-Framework](https://raw.githubusercontent.com/henrylee2cn/teleport/master/doc/teleport_framework.png)
 
 - `Peer`: 通信端点，可以是服务端或客户端
 - `Plugin`: 贯穿于通信各个环节的插件

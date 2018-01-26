@@ -75,11 +75,17 @@ TP与其他使用长连接的框架的性能对比：
 
 ![rpc_compare](https://raw.githubusercontent.com/henrylee2cn/tpdoc/master/01/src/rpc_compare.png)
 
-- CPU火焰图 teleport/socket
+- CPU耗时火焰图 teleport/socket
 
-![tp_socket_cpu_torch](https://raw.githubusercontent.com/henrylee2cn/teleport/master/doc/tp_socket_torch.png)
+![tp_socket_profile_torch](https://raw.githubusercontent.com/henrylee2cn/teleport/master/doc/tp_socket_profile_torch.png)
 
-**[svg file](https://github.com/henrylee2cn/teleport/raw/master/doc/tp_socket_torch.svg)**
+**[svg file](https://github.com/henrylee2cn/teleport/raw/master/doc/tp_socket_profile_torch.svg)**
+
+- 堆栈信息火焰图 teleport/socket
+
+![tp_socket_heap_torch](https://raw.githubusercontent.com/henrylee2cn/teleport/master/doc/tp_socket_heap_torch.png)
+
+**[svg file](https://github.com/henrylee2cn/teleport/raw/master/doc/tp_socket_heap_torch.svg)**
 
 ----------------------------------------
 

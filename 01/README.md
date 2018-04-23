@@ -505,7 +505,7 @@ type PeerConfig struct {
 	DefaultWriteTimeout time.Duration
 	SlowCometDuration   time.Duration
 	DefaultBodyCodec    string
-	PrintBody           bool
+	PrintDetail           bool
 	CountTime           bool
 	DefaultDialTimeout  time.Duration
 	RedialTimes         int32

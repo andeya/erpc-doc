@@ -28,15 +28,15 @@ tp-micro：https://github.com/xiaoenai/tp-micro
 
 我对于常见的一些相关开源项目做了一次粗略调查，发现迄今为止，除今天我向分享这款 [teleport](https://github.com/henrylee2cn/teleport) 框架外（确切讲应该是由teleport扩展出来的微服务框架 [tp-micro](https://github.com/xiaoenai/tp-micro)），貌似并没有另外一款Go语言的开源框架能够同时解决上述问题：
 
-| 框架 | 描述   | 高性能 |高效开发|DIY应用层协议 | Body编码协商 | RPC范式 | 插件 |推送|连接管理|兼容HTTP协议|
-| ------ | ------ | ---------------- | ---------------- | ------------- | -------- | -------- | -------- | -------- | -------- | -------- |
-| **teleport** | **TCP socket 框架** | ★★★★ | **√** | **√** | **√** |**√**|**√**|**√**|**√**|**√**|
-| net    | 标准包网络工具 | ★★★★★ | x | √ | x |x|x|√|√|x|
-| net/rpc | 标准包RPC | ★★★★☆ | x | x | x |√|x|x|x|x|
-| net/http(2) | 标准包HTTP2 | ★★★☆ | x | x | √ |x|x|√|x|√|
-| gRPC | 谷歌出品的RPC框架 | ★★★ | √ | x | √ |√|x|√|x|√|
-| rpcx | net/rpc的扩展框架 | ★★★★ | √ | x | x |√|√|√|x|√|
-| go-micro | 插件化微服务框架 | ★★★☆ | √ | x | x |√|√|√|x|√|
+| 框架         | 描述                | 高性能 | 高效开发 | DIY应用层协议 | Body编码协商 | RPC范式 | 插件  | 推送  | 连接管理 | 兼容HTTP协议 |
+| ------------ | ------------------- | ------ | -------- | ------------- | ------------ | ------- | ----- | ----- | -------- | ------------ |
+| **teleport** | **TCP socket 框架** | ★★★★   | **√**    | **√**         | **√**        | **√**   | **√** | **√** | **√**    | **√**        |
+| net          | 标准包网络工具      | ★★★★★  | x        | √             | x            | x       | x     | √     | √        | x            |
+| net/rpc      | 标准包RPC           | ★★★★☆  | x        | x             | x            | √       | x     | x     | x        | x            |
+| net/http(2)  | 标准包HTTP2         | ★★★☆   | x        | x             | √            | x       | x     | √     | x        | √            |
+| gRPC         | 谷歌出品的RPC框架   | ★★★    | √        | x             | √            | √       | x     | √     | x        | √            |
+| rpcx         | net/rpc的扩展框架   | ★★★★   | √        | x             | x            | √       | √     | √     | x        | √            |
+| go-micro     | 插件化微服务框架    | ★★★☆   | √        | x             | x            | √       | √     | √     | x        | √            |
 
 
 
@@ -74,7 +74,6 @@ TODO：尚未提供多语言客户端版本
 - 面向接口设计，保证代码稳定，提供灵活定制
 - 抽象核心模型，保持最简化
 - 分层设计，自下而上逐层封装，利于稳定和维护
-
 - 充分利用协程，且保证可控、可复用
 
 
@@ -100,6 +99,7 @@ TODO：尚未提供多语言客户端版本
 <td width="30%"><img src="https://github.com/henrylee2cn/rpc-benchmark/raw/master/result/p99_latency.png"></td>
 </tr>
 </table>
+
 
 
 ## 为兼容HTTP做准备
@@ -137,13 +137,13 @@ TODO：尚未提供多语言客户端版本
 
 
 
-#### Step1: 抽象 Message 对象
+### Step1: 抽象 Message 对象
 
 在  teleport/socket 包中抽象出 Message 结构体（上面已经介绍过了）
 
 
 
-#### Step2: 抽象 Proto 协议接口
+### Step2: 抽象 Proto 协议接口
 
 提供 Proto 协议接口，对 Message 对象进行序列化与反序列化，从而支持开发者的自定义实现自己的协议格式，其接口声明如下：
 
@@ -158,11 +158,8 @@ type Proto interface {
 解释：
 
 - `Version` ：实现该协议接口的版本号
-
 - `Pack` ：按照接口实现的规则，将 Message 的属性序列化为字节流
-
 - `Unpack` ：按照接口实现的规则，将字节流反序列化进一个 Message 对象
-
 
 目前框架已经提供三种协议：Raw、JSON、Protobuf。
 
@@ -222,9 +219,7 @@ type Codec interface {
 在 Request/Response 的通信场景下，按以下步骤进行 Body 编码类型协商：
 
 - Step1：请求端将当前 Body 的编码类型设置到 Message 的 `BodyCodec` 属性
-
 - Step2：在请求端希望收到请求Body不同的编码类型时（在web开发中很常见），就可以在 Message 对象的 Meta 元信息中设置 `X-Accept-Body-Codec` 来指定响应的编码类型
-
 - Step3：响应端根据请求的 `BodyCodec` 属性解码 Body，执行业务逻辑
 - Step4：响应端在发现有 `X-Accept-Body-Codec` 元信息时，使用该元信息指定类型编码响应 Body，否则默认使用与请求相同的编码类型。当然，响应端的开发者也可以明确指定编码类型，这样就会忽略前面的规则，强制使用该指定的编码类型。
 
@@ -255,7 +250,7 @@ type Codec interface {
 
 
 
-#### Step1：封装 Socket 模块
+### Step1：封装 Socket 模块
 
 首先，我们以分层的原则对来自net标准包的 `net.Conn` 进行封装得到 Socket 接口。它作为整个框架的底层通信接口，向上层提供应用层消息通信和连接管理的基础功能。
 
@@ -279,7 +274,7 @@ type Codec interface {
 
 
 
-#### Step2：封装 Session 模块
+### Step2：封装 Session 模块
 
 
 
@@ -300,7 +295,7 @@ Session 对象封装了 Socket 接口 ，并负责整个会话相关的事务（
 
 
 
-#### Step3：并发 Map 集中管理 Session
+### Step3：并发 Map 集中管理 Session
 
 Peer 是 teleport 对通信两端的对等抽象，除了 Listener 与 Dialer 固有的角色差异外，两种角色拥有完全一致的API。Peer 就包含有一个并发 Map 用于保存全部 Session。因此，开发者可以通过 Peer 实现：
 
@@ -351,3 +346,128 @@ Peer 是 teleport 对通信两端的对等抽象，除了 Listener 与 Dialer �
 以 `Ctx` 为例：
 
 ![tp_ctx](https://github.com/henrylee2cn/tpdoc/raw/master/02/src/ctx.png)
+
+## 高效开发的哪些事儿
+
+###  实现 RPC 开发范式
+
+实现 RPC 范式的好处是代码书写简单、代码结构清晰明了、对开发者友好。
+
+在此只贴出一个简单代码示例，不展开讨论封装细节。
+
+- server.go
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+
+	tp "github.com/henrylee2cn/teleport"
+)
+
+func main() {
+	// graceful
+	go tp.GraceSignal()
+
+	// server peer
+	srv := tp.NewPeer(tp.PeerConfig{
+		CountTime:   true,
+		ListenPort:  9090,
+		PrintDetail: true,
+	})
+
+	// router
+	srv.RouteCall(new(Math))
+
+	// broadcast per 5s
+	go func() {
+		for {
+			time.Sleep(time.Second * 5)
+			srv.RangeSession(func(sess tp.Session) bool {
+				sess.Push(
+					"/push/status",
+					fmt.Sprintf("this is a broadcast, server time: %v", time.Now()),
+				)
+				return true
+			})
+		}
+	}()
+
+	// listen and serve
+	srv.ListenAndServe()
+}
+
+// Math handler
+type Math struct {
+	tp.CallCtx
+}
+
+// Add handles addition request
+func (m *Math) Add(arg *[]int) (int, *tp.Rerror) {
+	// test query parameter
+	tp.Infof("author: %s", m.Query().Get("author"))
+	// add
+	var r int
+	for _, a := range *arg {
+		r += a
+	}
+	// response
+	return r, nil
+}
+```
+
+
+
+- client.go
+
+```go
+package main
+
+import (
+	"time"
+
+	tp "github.com/henrylee2cn/teleport"
+)
+
+func main() {
+	// log level
+	tp.SetLoggerLevel("ERROR")
+
+	cli := tp.NewPeer(tp.PeerConfig{})
+	defer cli.Close()
+
+	cli.RoutePush(new(Push))
+
+	sess, err := cli.Dial(":9090")
+	if err != nil {
+		tp.Fatalf("%v", err)
+	}
+
+	var result int
+	rerr := sess.Call("/math/add?author=henrylee2cn",
+		[]int{1, 2, 3, 4, 5},
+		&result,
+	).Rerror()
+	if rerr != nil {
+		tp.Fatalf("%v", rerr)
+	}
+	tp.Printf("result: %d", result)
+
+	tp.Printf("wait for 10s...")
+	time.Sleep(time.Second * 10)
+}
+
+// Push push handler
+type Push struct {
+	tp.PushCtx
+}
+
+// Push handles '/push/status' message
+func (p *Push) Status(arg *string) *tp.Rerror {
+	tp.Printf("%s", *arg)
+	return nil
+}
+```
+

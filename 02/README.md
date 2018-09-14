@@ -32,8 +32,6 @@ teleport：https://github.com/henrylee2cn/teleport
 | net/http(2) | 标准包HTTP2 | ★★★☆ | x | x | √ |x|x|√|x|√|
 | gRPC | 谷歌出品的RPC框架 | ★★★ | √ | x | √ |√|x|√|x|√|
 | rpcx | net/rpc的扩展框架 | ★★★★ | √ | x | x |√|√|√|x|√|
-| go-micro | 插件化微服务框架 | ★★★☆ | √ | x | x |√|√|√|x|√|
-
 
 
 ## 概述

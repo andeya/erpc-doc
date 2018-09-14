@@ -1,14 +1,10 @@
-# Go语言微服务框架简洁设计与实践
+# 聊聊 Go Socket 框架 Teleport 的设计思路
 
 
 
 **项目源码**
 
 teleport：https://github.com/henrylee2cn/teleport
-
-tp-micro：https://github.com/xiaoenai/tp-micro
-
-
 
 ## 背景
 
@@ -26,17 +22,17 @@ tp-micro：https://github.com/xiaoenai/tp-micro
 
 
 
-我对于常见的一些相关开源项目做了一次粗略调查，发现迄今为止，除今天我向分享这款 [teleport](https://github.com/henrylee2cn/teleport) 框架外（确切讲应该是由teleport扩展出来的微服务框架 [tp-micro](https://github.com/xiaoenai/tp-micro)），貌似并没有另外一款Go语言的开源框架能够同时解决上述问题：
+我对于常见的一些相关开源项目做了一次粗略调查，发现迄今为止，除今天我要分享的这款 [teleport](https://github.com/henrylee2cn/teleport) 框架外（确切讲还包括由teleport扩展而来的微服务框架 [tp-micro](https://github.com/xiaoenai/tp-micro)），貌似并没有另外一款Go语言的开源框架能够同时解决上述问题：
 
-| 框架         | 描述                | 高性能 | 高效开发 | DIY应用层协议 | Body编码协商 | RPC范式 | 插件  | 推送  | 连接管理 | 兼容HTTP协议 |
-| ------------ | ------------------- | ------ | -------- | ------------- | ------------ | ------- | ----- | ----- | -------- | ------------ |
-| **teleport** | **TCP socket 框架** | ★★★★   | **√**    | **√**         | **√**        | **√**   | **√** | **√** | **√**    | **√**        |
-| net          | 标准包网络工具      | ★★★★★  | x        | √             | x            | x       | x     | √     | √        | x            |
-| net/rpc      | 标准包RPC           | ★★★★☆  | x        | x             | x            | √       | x     | x     | x        | x            |
-| net/http(2)  | 标准包HTTP2         | ★★★☆   | x        | x             | √            | x       | x     | √     | x        | √            |
-| gRPC         | 谷歌出品的RPC框架   | ★★★    | √        | x             | √            | √       | x     | √     | x        | √            |
-| rpcx         | net/rpc的扩展框架   | ★★★★   | √        | x             | x            | √       | √     | √     | x        | √            |
-| go-micro     | 插件化微服务框架    | ★★★☆   | √        | x             | x            | √       | √     | √     | x        | √            |
+| 框架 | 描述   | 高性能 |高效开发|DIY应用层协议 | Body编码协商 | RPC范式 | 插件 |推送|连接管理|兼容HTTP协议|
+| ------ | ------ | ---------------- | ---------------- | ------------- | -------- | -------- | -------- | -------- | -------- | -------- |
+| **teleport** | **TCP socket 框架** | ★★★★ | **√** | **√** | **√** |**√**|**√**|**√**|**√**|**√**|
+| net    | 标准包网络工具 | ★★★★★ | x | √ | x |x|x|√|√|x|
+| net/rpc | 标准包RPC | ★★★★☆ | x | x | x |√|x|x|x|x|
+| net/http(2) | 标准包HTTP2 | ★★★☆ | x | x | √ |x|x|√|x|√|
+| gRPC | 谷歌出品的RPC框架 | ★★★ | √ | x | √ |√|x|√|x|√|
+| rpcx | net/rpc的扩展框架 | ★★★★ | √ | x | x |√|√|√|x|√|
+| go-micro | 插件化微服务框架 | ★★★☆ | √ | x | x |√|√|√|x|√|
 
 
 
@@ -57,14 +53,6 @@ TODO：尚未提供多语言客户端版本
 
 
 
- [tp-micro](https://github.com/xiaoenai/tp-micro) 是以 teleport + plugin 的方式扩展而来的微服务。虽然目前还有一些功能未开发，但已有两家公司使用。它在完整继承 teleport 特性的同时，增加如下主要特性：
-
-|      *       |        *         |    *     |    *     |         *          |   *    |       *        |   *    |  *   |
-| :----------: | :--------------: | :------: | :------: | :----------------: | :----: | :------------: | :----: | :--: |
-| 服务自动发现 | 自定义微服务路由 | 负载均衡 | 心跳机制 | 过载保护（断路器） | 热编译 | 由模板生成项目 | ...... |      |
-
-
-
 ## 架构
 
 
@@ -74,6 +62,7 @@ TODO：尚未提供多语言客户端版本
 - 面向接口设计，保证代码稳定，提供灵活定制
 - 抽象核心模型，保持最简化
 - 分层设计，自下而上逐层封装，利于稳定和维护
+
 - 充分利用协程，且保证可控、可复用
 
 
@@ -81,8 +70,6 @@ TODO：尚未提供多语言客户端版本
 ### 架构示意图
 
 ![Teleport-Framework](https://github.com/henrylee2cn/teleport/raw/v4/doc/teleport_module_diagram.png)
-
-![tp-micro flow chart](https://github.com/xiaoenai/tp-micro/raw/v3/doc/tp-micro_flow_chart.png)
 
 注：“tp” 是 teleport 的包名，因此它代指 “teleport”。
 
@@ -99,7 +86,6 @@ TODO：尚未提供多语言客户端版本
 <td width="30%"><img src="https://github.com/henrylee2cn/rpc-benchmark/raw/master/result/p99_latency.png"></td>
 </tr>
 </table>
-
 
 
 ## 为兼容HTTP做准备
@@ -122,8 +108,6 @@ TODO：尚未提供多语言客户端版本
 从下图 teleport 报文属性与 HTTP 报文对比中，不难发现它们有共通之处。
 
 ![tp_data_message](https://github.com/henrylee2cn/teleport/raw/v4/doc/tp_data_message.png)
-
-
 
 ## 如何实现DIY应用层协议？
 
@@ -158,8 +142,11 @@ type Proto interface {
 解释：
 
 - `Version` ：实现该协议接口的版本号
+
 - `Pack` ：按照接口实现的规则，将 Message 的属性序列化为字节流
+
 - `Unpack` ：按照接口实现的规则，将字节流反序列化进一个 Message 对象
+
 
 目前框架已经提供三种协议：Raw、JSON、Protobuf。
 
@@ -219,7 +206,9 @@ type Codec interface {
 在 Request/Response 的通信场景下，按以下步骤进行 Body 编码类型协商：
 
 - Step1：请求端将当前 Body 的编码类型设置到 Message 的 `BodyCodec` 属性
+
 - Step2：在请求端希望收到请求Body不同的编码类型时（在web开发中很常见），就可以在 Message 对象的 Meta 元信息中设置 `X-Accept-Body-Codec` 来指定响应的编码类型
+
 - Step3：响应端根据请求的 `BodyCodec` 属性解码 Body，执行业务逻辑
 - Step4：响应端在发现有 `X-Accept-Body-Codec` 元信息时，使用该元信息指定类型编码响应 Body，否则默认使用与请求相同的编码类型。当然，响应端的开发者也可以明确指定编码类型，这样就会忽略前面的规则，强制使用该指定的编码类型。
 
@@ -347,9 +336,22 @@ Peer 是 teleport 对通信两端的对等抽象，除了 Listener 与 Dialer �
 
 ![tp_ctx](https://github.com/henrylee2cn/tpdoc/raw/master/02/src/ctx.png)
 
-## 高效开发的哪些事儿
+## 实践：轻松组装微服务
 
-###  实现 RPC 开发范式
+ [tp-micro](https://github.com/xiaoenai/tp-micro) 是以 teleport + plugin 的方式扩展而来的微服务。虽然目前还有一些功能未开发，但已有两家公司使用。它在完整继承 teleport 特性的同时，增加如下主要模块：
+
+|                模块                |            模块            |   模块   |        模块        |     模块     |  模块  |
+| :--------------------------------: | :------------------------: | :------: | :----------------: | :----------: | :----: |
+|            服务注册插件            | 路由发现插件（含负载均衡） | 心跳插件 | 参数绑定与校验插件 | 安全加密插件 | 断路器 |
+| 脚手架工具：由模板生成项目、热编译 |            网关            |   灰度   |       Agent        |              |        |
+
+
+
+![tp-micro flow chart](https://github.com/xiaoenai/tp-micro/raw/v3/doc/tp-micro_flow_chart.png)
+
+## 聊聊高效开发的一些事儿
+
+### 实现 RPC 开发范式
 
 实现 RPC 范式的好处是代码书写简单、代码结构清晰明了、对开发者友好。
 
@@ -471,3 +473,107 @@ func (p *Push) Status(arg *string) *tp.Rerror {
 }
 ```
 
+
+
+### 处理错误的姿势
+
+teleport 对于 Handler 的错误返回值，并没有采用 error 接口类型，而是定义了一个 Rerror 结构体：（用法见上面示例代码）
+
+```go
+type Rerror struct {
+    // Code error code
+    Code int32
+    // Message the error message displayed to the user (optional)
+    Message string
+    // Reason the cause of the error for debugging (optional)
+    Reason string
+}
+```
+
+这样设计有几个好处：
+
+- Code 字段表示错误代号，类似 HTTP 状态码，有利于和 HTTP 协议完美兼容，同时也方便插件和客户端对错误类型快速判断与处理
+
+- Message 字段用于给客户端的错误提示信息，可进行字符串格式的定制
+
+- Reason 字段记录错误发生的原因甚至上下文，助力Debug
+
+- 如果开发者需要与 error 接口交互，`Rerror.ToError() error` 方法可以实现
+
+
+
+可能有人会问：为什么不直接实现 ~~`Rerror.Error() error`~~ ？因为我是故意的！原因则涉及到 interface 的一个经典的坑：(*Rerror)(nil) !=(error)(nil)。如果开发者不小心写出下面的代码，就掉坑里了：
+
+```
+var err error
+err = sess.Call(...).Rerror()
+if err != nil { // 此处掉坑里了，必定会进入错误处理逻辑，因为 (*Rerror)(nil) != (error)(nil) 永远成立
+    ...
+}
+```
+
+
+
+推荐：服务端定义一张全局的错误码表，方便于客户端对接以及错误Debug。比如这样的规则：
+
+- 1 ≤ Code ≤ 999：框架错误，包括通信错误，具体可以与 HTTP 状态码保持一致
+- 1000 ≤ Code ≤ 9999：基础服务错误
+- 1000000 ≤ 999999：业务错误，前四位表示模块或服务，后两位表示当前模块或服务中错误序号
+
+
+
+### 推荐一种很酷的项目结构
+
+这是 tp-micro 中默认的项目组织结构，它有 `micro gen` 命令由模板自动构建。
+
+```
+├── README.md
+├── __tp-micro__gen__.lock
+├── __tp-micro__tpl__.go
+├── config
+│   └── config.yaml
+├── config.go
+├── internal
+│   ├── handler
+│   │   ├── call.tmp.go
+│   │   └── push.tmp.go
+│   └── model
+│       ├── init.go
+│       ├── mongo_meta.gen.go
+│       ├── mysql_device.gen.go
+│       ├── mysql_log.gen.go
+│       └── mysql_user.gen.go
+├── log
+│   └── PID
+├── main.go
+├── router.gen.go
+└── sdk
+    ├── rerr.go
+    ├── rpc.gen.go
+    ├── rpc.gen_test.go
+    ├── type.gen.go
+    └── val.gen.go
+```
+
+该项目结构整体分为两部分。
+
+一部分是对外公开的代码，都位于 sdk 目录下，比如 client 远程调用的函数就在这里。
+
+剩余代码都是不对外公开的，属于 server 进程的部分，其中私有包 internal 下是 server 的主体业务逻辑部分。
+
+这样设计的好处是：
+
+- 外部调用者（一般是客户端）只能导入 sdk 包，其余的包要么在 internal 下被私有化，要么就是 main 包，都无法导入；从而起到了从语法级别隔离代码目的，有效地解决了误用代码、复杂依赖的问题
+- 将 sdk 代码与 server 代码放在同一项目中，便于统一管理，减少更新时人为原因造成客户端与服务端接口对不上的情况
+
+
+
+### 脚手架提升开发效率
+
+在 tp-micro 中，提供了一个 `micro` 工具，介绍两个最常用的命令：
+
+- 命令 `micro gen` 可以通过模板可以快速生成一个项目（上面提到的项目结构）
+  - 其中包括 mysql、mongo、redis 相关的 model 层代码
+  - README.md 中会自动写入接口文档等，便于交付给客户端同学
+  - 支持覆盖更新部分代码，比如新增接口。
+- 命令 `micro run` 可以自动编译运行指定项目，并在项目代码发生变化时自动进行平滑升级

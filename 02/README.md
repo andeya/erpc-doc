@@ -349,3 +349,5 @@ Peer 是 teleport 对通信两端的对等抽象，除了 Listener 与 Dialer �
 其中以 `Peer`、`Session`、 `Ctx` 为后缀的入参（接口类型），涉及到一种非常有趣、有用的 interface 用法——限制方法集。
 
 以 `Ctx` 为例：
+
+![tp_ctx](https://github.com/henrylee2cn/tpdoc/raw/master/02/src/ctx.png)

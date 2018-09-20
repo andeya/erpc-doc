@@ -1,14 +1,13 @@
 # 聊聊 Go Socket 框架 Teleport 的设计思路
 
 
-
 **项目源码**
 
 teleport：https://github.com/henrylee2cn/teleport
 
 ## 背景
 
-大家在进行业务开发时，是否遇到过下列问题，并且无法在Go语言开源生态中找到一套完整的解决方案？
+大家在进行业务开发时，是否是否遇到过下列问题，并且无法在Go语言开源生态中找到一套完整的解决方案？
 
 - 高性能、可靠地通信？
 - 开发效率不高？
@@ -26,12 +25,13 @@ teleport：https://github.com/henrylee2cn/teleport
 
 | 框架 | 描述   | 高性能 |高效开发|DIY应用层协议 | Body编码协商 | RPC范式 | 插件 |推送|连接管理|兼容HTTP协议|
 | ------ | ------ | ---------------- | ---------------- | ------------- | -------- | -------- | -------- | -------- | -------- | -------- |
-| **teleport** | **TCP socket 框架** | ★★★★ | **√** | **√** | **√** |**√**|**√**|**√**|**√**|**√**|
-| net    | 标准包网络工具 | ★★★★★ | x | √ | x |x|x|√|√|x|
-| net/rpc | 标准包RPC | ★★★★☆ | x | x | x |√|x|x|x|x|
-| net/http(2) | 标准包HTTP2 | ★★★☆ | x | x | √ |x|x|√|x|√|
-| gRPC | 谷歌出品的RPC框架 | ★★★ | √ | x | √ |√|x|√|x|√|
-| rpcx | net/rpc的扩展框架 | ★★★★ | √ | x | x |√|√|√|x|√|
+| **teleport** | **TCP socket 框架** | ★★★★ | ✓ | ✓ | ✓ |✓|✓|✓|✓|✓|
+| net    | 标准包网络工具 | ★★★★★ | x | ✓ | x |x|x|✓|✓|x|
+| net/rpc | 标准包RPC | ★★★★☆ | x | x | x |✓|x|x|x|x|
+| net/http(2) | 标准包HTTP2 | ★★★☆ | x | x | ✓ |x|x|✓|x|✓|
+| gRPC | 谷歌出品的RPC框架 | ★★★ | ✓ | x | ✓ |✓|x|✓|x|✓|
+| rpcx | net/rpc的扩展框架 | ★★★★ | ✓ | x | x |✓|✓|✓|x|✓|
+
 
 
 ## 概述
@@ -209,6 +209,59 @@ type Codec interface {
 
 - Step3：响应端根据请求的 `BodyCodec` 属性解码 Body，执行业务逻辑
 - Step4：响应端在发现有 `X-Accept-Body-Codec` 元信息时，使用该元信息指定类型编码响应 Body，否则默认使用与请求相同的编码类型。当然，响应端的开发者也可以明确指定编码类型，这样就会忽略前面的规则，强制使用该指定的编码类型。
+
+
+
+在上述 Step2 中，请求端设置 Message 对象的 `X-Accept-Body-Codec` Meta 元信息的一段代码片段：
+
+```go
+session.Call("/a/b", arg, result, tp.WithAcceptBodyCodec(codec.ID_PROTOBUF))
+```
+
+
+其中，`tp.WithAcceptBodyCodec` 是一种修饰函数的用法，这类函数可以实现灵活地配置策略，一些相关定义如下。在 teleport/socket 包中：
+
+```go
+type MessageSetting func(*Message)
+
+func WithAddMeta(key, value string) MessageSetting {
+	return func(m *Message) {
+		m.meta.Add(key, value)
+	}
+}
+```
+
+在 teleport 包中：
+
+```go
+const MetaAcceptBodyCodec = "X-Accept-Body-Codec"
+
+func WithAcceptBodyCodec(bodyCodec byte) MessageSetting {
+	if bodyCodec == codec.NilCodecId {
+		return func(*Message) {}
+	}
+	return socket.WithAddMeta(MetaAcceptBodyCodec, strconv.FormatUint(uint64(bodyCodec), 10))
+}
+...
+type Session interface {
+    Call(uri string, arg interface{}, result interface{}, setting ...socket.MessageSetting) CallCmd
+}
+```
+
+说明：Call 其实类似于 net/http 中的 `func (c *Client) Do(req *Request) (*Response, error)` 是根据请求参数 Message 进行请求的。
+
+在该场景中为什么选择使用修饰函数？为什么不直接传入 Message 结构体（先将其字段公开）？
+
+- Message 的字段很多，有的必填，有的选填；例如必填参数 uri、arg 都是它的字段（arg对应body字段），meta、context 等为选填；通过上述这种“必填参数+修饰函数不定参”的方法声明，可以从语法层面明确使用规范（如换成使用结构体，只能使用约定，然后在运行时检查）
+- 修饰函数的方式可以封装更加复杂的配置逻辑，比如设置两个关联参数的情况，某个字段需要写多行代码进行初始化的情况
+- 修饰函数的使用更加灵活，具有很强的封装性，比如可以提供常用的修饰函数包，可以多个修饰函数嵌套组合成一个新的修饰函数等等
+- 特意将 Message 的字段声明为私有，同时在当前包内提供一些基础修饰函数，可以大大提高配置的可控性与安全性，同时也避免了开发者学习一些配置约定的成本
+
+概括一下修饰函数的使用场景：
+
+- 配置项很多且一些配置间存在联动性
+- 配置项的结构体本身属于内部逻辑的一部分，如果外部传入后再对其进行修改，会对内部造成执行bug的情况
+- 若仅仅是简单的配置，建议使用结构体，更加简单直接，比如 mysql 的配置等
 
 
 

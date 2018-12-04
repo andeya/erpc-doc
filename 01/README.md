@@ -77,15 +77,15 @@ TP与其他使用长连接的框架的性能对比：
 
 - CPU耗时火焰图 teleport/socket
 
-![tp_socket_profile_torch](https://raw.githubusercontent.com/henrylee2cn/teleport/master/doc/tp_socket_profile_torch.png)
+![tp_socket_profile_torch](https://raw.githubusercontent.com/henrylee2cn/teleport/v3/doc/tp_socket_profile_torch.png)
 
-**[svg file](https://github.com/henrylee2cn/teleport/raw/master/doc/tp_socket_profile_torch.svg)**
+**[svg file](https://github.com/henrylee2cn/teleport/raw/v3/doc/tp_socket_profile_torch.svg)**
 
 - 堆栈信息火焰图 teleport/socket
 
-![tp_socket_heap_torch](https://raw.githubusercontent.com/henrylee2cn/teleport/master/doc/tp_socket_heap_torch.png)
+![tp_socket_heap_torch](https://raw.githubusercontent.com/henrylee2cn/teleport/v3/doc/tp_socket_heap_torch.png)
 
-**[svg file](https://github.com/henrylee2cn/teleport/raw/master/doc/tp_socket_heap_torch.svg)**
+**[svg file](https://github.com/henrylee2cn/teleport/raw/v3/doc/tp_socket_heap_torch.svg)**
 
 ----------------------------------------
 
@@ -102,7 +102,7 @@ TP定位于提供socket通信解决方案，遵循以下三点设计理念。
 
 ### 2 架构图
 
-![Teleport-Framework](https://raw.githubusercontent.com/henrylee2cn/teleport/master/doc/teleport_framework.png)
+![Teleport-Framework](https://raw.githubusercontent.com/henrylee2cn/teleport/v3/doc/teleport_framework.png)
 
 - `Peer`: 通信端点，可以是服务端或客户端
 - `Plugin`: 贯穿于通信各个环节的插件
